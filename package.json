@@ -1,0 +1,27 @@
+{
+  "name": "rishabh-jh10c-pay-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Premium digital product store by RISHABH JH10C — Next.js + Tailwind + MongoDB + Discord OAuth",
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "framer-motion": "^11.11.17",
+    "mongoose": "^8.9.0",
+    "next": "^14.2.5",
+    "next-auth": "^4.24.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
+}

@@ -38,7 +38,7 @@ export async function POST(request) {
   try {
     await connectDB();
     const body = await request.json();
-    const { productId, quantity = 1, notes = "", planLabel, planDays } = body || {};
+    const { productId, planId, quantity = 1, notes = "", planLabel, planDays } = body || {};
 
     if (!productId) {
       return NextResponse.json(
@@ -75,22 +75,38 @@ export async function POST(request) {
       await incrementStat("users");
     }
 
-    // 3. Server-Side Price & Duration Plan Verification
+    // 3. Server-Side Price & Duration Plan Verification (Never trust client price)
     const qty = Math.max(1, Number(quantity) || 1);
     let unitPrice = Number(product.price) || 0;
     let selectedPlanData = null;
+    let resolvedPlanId = planId ? String(planId).trim() : "";
 
     if (Array.isArray(product.plans) && product.plans.length > 0) {
       let matchedPlan = null;
-      if (planLabel) {
+
+      // Try matching by planId first (ObjectId string or label match)
+      if (resolvedPlanId) {
+        matchedPlan = product.plans.find(
+          (p) =>
+            (p._id && String(p._id) === resolvedPlanId) ||
+            (p.id && String(p.id) === resolvedPlanId) ||
+            String(p.label).trim().toLowerCase() === resolvedPlanId.toLowerCase()
+        );
+      }
+
+      // Try matching by planLabel
+      if (!matchedPlan && planLabel) {
         matchedPlan = product.plans.find(
           (p) =>
             String(p.label).trim().toLowerCase() === String(planLabel).trim().toLowerCase()
         );
       }
-      if (!matchedPlan && planDays !== undefined) {
+
+      // Try matching by planDays
+      if (!matchedPlan && planDays !== undefined && planDays !== null) {
         matchedPlan = product.plans.find((p) => Number(p.days) === Number(planDays));
       }
+
       // If client didn't match or didn't supply plan, default to lowest price plan
       if (!matchedPlan) {
         matchedPlan = product.plans.reduce(
@@ -100,6 +116,7 @@ export async function POST(request) {
       }
 
       unitPrice = Number(matchedPlan.price);
+      resolvedPlanId = matchedPlan._id ? String(matchedPlan._id) : (matchedPlan.label || resolvedPlanId);
       selectedPlanData = {
         label:
           matchedPlan.label ||
@@ -110,30 +127,57 @@ export async function POST(request) {
     }
 
     const totalPrice = unitPrice * qty;
+    // Calculate total amount in integer paise (₹1 = 100 paise)
+    const totalAmountPaise = Math.round(totalPrice * 100);
+
+    const fampayUpiId =
+      process.env.FAMPAY_UPI_ID || process.env.UPI_ID || "rishabh04@fam";
+    const upiName = process.env.UPI_NAME || "RISHABH JH10C PAY";
 
     // 4. Reuse Existing Unexpired Pending Order for the same Product & Plan
     const now = new Date();
+    const userOr = [
+      { userId: session.user.id },
+      { discordId: session.user.id },
+      ...(userDoc?._id ? [{ user: userDoc._id }] : []),
+    ];
+    const productOr = [{ productId: product._id }, { product: product._id }];
+
     const reuseFilter = {
-      $or: [
-        { discordId: session.user.id },
-        ...(userDoc?._id ? [{ user: userDoc._id }] : []),
+      $and: [
+        { $or: userOr },
+        { $or: productOr },
+        { status: "pending" },
+        { expiresAt: { $gt: now } },
       ],
-      product: product._id,
-      status: "pending",
-      expiresAt: { $gt: now },
     };
 
-    if (selectedPlanData?.label) {
-      reuseFilter["plan.label"] = selectedPlanData.label;
+    if (resolvedPlanId) {
+      reuseFilter.$and.push({
+        $or: [
+          { planId: resolvedPlanId },
+          ...(selectedPlanData?.label ? [{ "plan.label": selectedPlanData.label }] : []),
+        ],
+      });
+    } else if (selectedPlanData?.label) {
+      reuseFilter.$and.push({ "plan.label": selectedPlanData.label });
     }
 
     const existingPendingOrder = await Order.findOne(reuseFilter).sort({ createdAt: -1 });
 
     if (existingPendingOrder) {
+      const orderAmountPaise =
+        existingPendingOrder.amountPaise || Math.round((Number(existingPendingOrder.price) || 0) * 100);
+      const formattedAmount = (orderAmountPaise / 100).toFixed(2);
+      const upiLink = `upi://pay?pa=${encodeURIComponent(fampayUpiId)}&pn=${encodeURIComponent(upiName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(String(existingPendingOrder._id))}`;
+
       return NextResponse.json({
         ok: true,
         reused: true,
         orderId: String(existingPendingOrder._id),
+        amount: Number(formattedAmount),
+        amountPaise: orderAmountPaise,
+        upiLink,
         checkoutUrl: `/checkout/${existingPendingOrder._id}`,
         order: toPlainText(existingPendingOrder),
       });
@@ -149,12 +193,7 @@ export async function POST(request) {
       const cooldownMinutes = Math.max(1, Number(cooldownMinutesSetting) || 10);
       const cooldownMs = cooldownMinutes * 60 * 1000;
 
-      const latestOrder = await Order.findOne({
-        $or: [
-          { discordId: session.user.id },
-          ...(userDoc?._id ? [{ user: userDoc._id }] : []),
-        ],
-      })
+      const latestOrder = await Order.findOne({ $or: userOr })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -177,14 +216,19 @@ export async function POST(request) {
       }
     }
 
-    // 6. Create the pending order with a 10-minute payment timer
+    // 6. Create the pending order with 10-minute expiration & integer amountPaise
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const order = await Order.create({
+      userId: session.user.id,
       user: userDoc._id,
+      productId: product._id,
       product: product._id,
+      planId: resolvedPlanId,
+      amountPaise: totalAmountPaise,
       price: totalPrice,
       amount: totalPrice,
       status: "pending",
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      expiresAt,
       productName: product.name,
       customerName: session.user.name || userDoc.username || "Discord User",
       email: session.user.email || userDoc.email || "",
@@ -194,7 +238,11 @@ export async function POST(request) {
       ...(selectedPlanData ? { plan: selectedPlanData } : {}),
     });
 
-    // 7. Update global store counters
+    // 7. Generate UPI payment intent link
+    const formattedAmount = (totalAmountPaise / 100).toFixed(2);
+    const upiLink = `upi://pay?pa=${encodeURIComponent(fampayUpiId)}&pn=${encodeURIComponent(upiName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(String(order._id))}`;
+
+    // 8. Update global store counters
     await incrementStat("orders");
 
     revalidatePath("/dashboard");
@@ -204,6 +252,9 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       orderId: String(order._id),
+      amount: Number(formattedAmount),
+      amountPaise: totalAmountPaise,
+      upiLink,
       checkoutUrl: `/checkout/${order._id}`,
       order: toPlainText(order),
     });

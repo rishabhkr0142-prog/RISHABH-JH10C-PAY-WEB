@@ -12,6 +12,7 @@ export default function CheckoutClient({
   initialOrder,
   qrCodeDataUrl,
   upiLink,
+  upiId,
   upiIdMasked,
 }) {
   const router = useRouter();
@@ -20,6 +21,9 @@ export default function CheckoutClient({
   const [submittingUtr, setSubmittingUtr] = useState(false);
   const [toast, setToast] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  const displayUpiId = upiId || initialOrder?.fampayUpiId || "rishabh04@fam";
 
   // Expiration calculation based on server's expiresAt
   const expiresAtMs = useMemo(() => {
@@ -53,7 +57,7 @@ export default function CheckoutClient({
     return () => clearInterval(interval);
   }, [expiresAtMs, order?.status]);
 
-  // 2. Poll Order Status every 5 seconds
+  // 2. Poll Order Status every 3 seconds
   useEffect(() => {
     if (order?.status !== "pending") return;
 
@@ -64,11 +68,17 @@ export default function CheckoutClient({
         const data = await res.json();
         if (data?.order) {
           setOrder(data.order);
+          if (data.order.status === "paid" || data.order.status === "completed") {
+            setToast({
+              type: "success",
+              message: "Payment verified successfully!",
+            });
+          }
         }
       } catch (err) {
         // Polling failure is silent
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(pollInterval);
   }, [order?._id, order?.status]);
@@ -90,10 +100,10 @@ export default function CheckoutClient({
   const isPaid = order?.status === "paid" || order?.status === "completed";
   const isCancelled = order?.status === "cancelled";
 
-  // Handle UTR Submission
+  // Handle Instant UPI UTR Verification
   const handleSubmitUtr = async (e) => {
-    e.preventDefault();
-    const clean = utrInput.replace(/[\s-]/g, "");
+    if (e && e.preventDefault) e.preventDefault();
+    const clean = String(utrInput || order?.utr || "").replace(/[\s-]/g, "");
 
     if (!/^\d{12}$/.test(clean)) {
       setToast({
@@ -107,7 +117,7 @@ export default function CheckoutClient({
     setToast(null);
 
     try {
-      const res = await fetch(`/api/orders/${order._id}/utr`, {
+      const res = await fetch(`/api/orders/${order._id}/verify-utr`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ utr: clean }),
@@ -116,18 +126,23 @@ export default function CheckoutClient({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to submit UTR");
+        throw new Error(data.error || "Payment verification failed");
       }
 
-      setOrder((prev) => ({ ...prev, utr: clean }));
+      if (data?.order) {
+        setOrder(data.order);
+      } else {
+        setOrder((prev) => ({ ...prev, utr: clean, status: "paid" }));
+      }
+
       setToast({
         type: "success",
-        message: "UTR submitted successfully! Waiting for admin payment verification.",
+        message: data.message || "Payment verified successfully!",
       });
     } catch (err) {
       setToast({
         type: "error",
-        message: err.message || "Failed to submit UTR. Please try again.",
+        message: err.message || "Payment verification failed. Please try again.",
       });
     } finally {
       setSubmittingUtr(false);
@@ -138,6 +153,12 @@ export default function CheckoutClient({
     navigator.clipboard.writeText(String(order._id));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyUpiId = () => {
+    navigator.clipboard.writeText(displayUpiId);
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2000);
   };
 
   const discordInvite =
@@ -386,8 +407,25 @@ export default function CheckoutClient({
                   <div className="mt-1 font-mono text-xs font-medium text-neutral-600">
                     Order Ref: #{String(order._id).slice(-8)}
                   </div>
-                  <div className="mt-1 text-[11px] text-neutral-500">
-                    Payee: <strong>{upiIdMasked}</strong>
+
+                  {/* FamPay UPI ID with Copy Button */}
+                  <div className="mt-3 flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-100/80 px-3 py-2 text-xs">
+                    <div className="flex flex-col text-left">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                        FamPay UPI ID
+                      </span>
+                      <span className="font-mono font-bold text-neutral-900">
+                        {displayUpiId}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={copyUpiId}
+                      className="rounded border border-neutral-300 bg-white px-2.5 py-1 font-mono text-[11px] font-semibold text-neutral-800 hover:bg-neutral-50 transition"
+                      title="Copy FamPay UPI ID"
+                    >
+                      {copiedUpi ? "✓ Copied" : "Copy"}
+                    </button>
                   </div>
                 </div>
 
@@ -476,19 +514,45 @@ export default function CheckoutClient({
                   <strong>UPI Reference Number</strong> in your transaction receipt and enter it below.
                 </p>
 
-                {order.utr ? (
-                  <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                {order.utr && !utrInput ? (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-neutral-900/60 p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-amber-300">
+                      <span className="text-xs font-medium text-neutral-300">
                         Submitted UTR:
                       </span>
                       <span className="font-mono text-xs font-bold text-white">
                         {order.utr}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-[11px] text-amber-200">
+
+                    <div className="flex items-center gap-2 text-[11px] text-neutral-400">
                       <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                      Waiting for admin verification. This page will update automatically.
+                      Checking payment status. If you just paid, wait 30-60s and click verify.
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleSubmitUtr}
+                        disabled={submittingUtr}
+                        className="btn-primary flex-1 !py-2 !text-xs font-bold"
+                      >
+                        {submittingUtr ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            Verifying...
+                          </span>
+                        ) : (
+                          "Verify Payment"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUtrInput(order.utr)}
+                        className="btn-ghost !py-2 !text-xs"
+                      >
+                        Edit UTR
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -513,10 +577,10 @@ export default function CheckoutClient({
                       {submittingUtr ? (
                         <span className="flex items-center justify-center gap-2">
                           <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                          Submitting UTR...
+                          Verifying Payment...
                         </span>
                       ) : (
-                        "Submit UTR for Instant Verification"
+                        "Verify Payment"
                       )}
                     </button>
                   </form>

@@ -8,26 +8,50 @@ const ORDER_STATUSES = ["pending", "paid", "expired", "cancelled", "completed"];
 
 const OrderSchema = new mongoose.Schema(
   {
-    // Reference to User
+    // Buyer Discord ID
+    userId: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    // Reference to User document
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       index: true,
     },
-    // Reference to Product
+    // Product reference
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      index: true,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
       index: true,
     },
-    // Required price field
+    // Duration plan reference or identifier (e.g. "plan-30d", "Lifetime", etc.)
+    planId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    // Exact payment amount in integer Paise (₹1 = 100 Paise)
+    amountPaise: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+      index: true,
+    },
+    // Backward-compatible rupee fields (synced with amountPaise)
     price: {
       type: Number,
       required: true,
       min: 0,
       default: 0,
     },
-    // Backward-compatible amount (synced with price)
     amount: {
       type: Number,
       default: 0,
@@ -45,14 +69,21 @@ const OrderSchema = new mongoose.Schema(
       default: () => new Date(Date.now() + 10 * 60 * 1000),
       index: true,
     },
-    // Customer-submitted 12-digit UPI Transaction / UTR reference
+    // Verified 12-digit UPI UTR reference
     utr: {
       type: String,
       default: "",
       trim: true,
       index: true,
     },
-    // Timestamp when payment was confirmed by admin
+    // Reference to claimed Payment document
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Payment",
+      default: null,
+      index: true,
+    },
+    // Timestamp when payment was confirmed
     paidAt: {
       type: Date,
       default: null,
@@ -74,12 +105,24 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true, collection: "orders" }
 );
 
-// Pre-save hook: sync amount <-> price
+// Pre-save hook: sync amountPaise <-> price and userId <-> discordId
 OrderSchema.pre("save", function (next) {
-  if (this.price !== undefined && (!this.amount || this.amount === 0)) {
+  if (this.amountPaise !== undefined && this.amountPaise > 0) {
+    this.price = this.amountPaise / 100;
     this.amount = this.price;
-  } else if (this.amount !== undefined && (!this.price || this.price === 0)) {
-    this.price = this.amount;
+  } else if (this.price !== undefined && this.price > 0 && (!this.amountPaise || this.amountPaise === 0)) {
+    this.amountPaise = Math.round(this.price * 100);
+    this.amount = this.price;
+  }
+  if (!this.userId && this.discordId) {
+    this.userId = this.discordId;
+  } else if (!this.discordId && this.userId) {
+    this.discordId = this.userId;
+  }
+  if (!this.productId && this.product) {
+    this.productId = this.product;
+  } else if (!this.product && this.productId) {
+    this.product = this.productId;
   }
   next();
 });

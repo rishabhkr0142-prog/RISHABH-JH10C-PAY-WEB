@@ -33,6 +33,7 @@ export async function GET(request, { params }) {
     }
 
     const isOwner =
+      order.userId === session.user.id ||
       order.discordId === session.user.id ||
       (userDoc?._id && String(order.user) === String(userDoc._id)) ||
       (session.user.email && order.email === session.user.email);

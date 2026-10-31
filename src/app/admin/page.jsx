@@ -3,6 +3,7 @@ import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import Client from "@/models/Client";
+import Payment from "@/models/Payment";
 import { toPlainText } from "@/lib/serialize";
 import { formatPrice, timeAgo } from "@/lib/format";
 
@@ -11,12 +12,22 @@ export const dynamic = "force-dynamic";
 export default async function AdminOverviewPage() {
   await connectDB();
 
-  const [userCount, clientUserCount, legacyClientCount, orderCount, allOrders] = await Promise.all([
+  const [
+    userCount,
+    clientUserCount,
+    legacyClientCount,
+    orderCount,
+    allOrders,
+    unclaimedPaymentsCount,
+    totalPaymentsCount,
+  ] = await Promise.all([
     User.countDocuments().catch(() => 0),
     User.countDocuments({ role: "client" }).catch(() => 0),
     Client.countDocuments().catch(() => 0),
     Order.countDocuments().catch(() => 0),
     Order.find().sort({ createdAt: -1 }).lean().catch(() => []),
+    Payment.countDocuments({ status: "unclaimed" }).catch(() => 0),
+    Payment.countDocuments().catch(() => 0),
   ]);
 
   const totalClients = clientUserCount > 0 ? clientUserCount : legacyClientCount;
@@ -51,6 +62,29 @@ export default async function AdminOverviewPage() {
 
   return (
     <div className="space-y-8">
+      {/* Unclaimed Payments Alert */}
+      {unclaimedPaymentsCount > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="font-bold text-amber-200">
+                {unclaimedPaymentsCount} Unclaimed UPI Payment{unclaimedPaymentsCount > 1 ? "s" : ""}
+              </p>
+              <p className="text-[11px] text-amber-300/80">
+                Payments logged via webhook from FamPay are awaiting order matching.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin/orders"
+            className="btn-primary !px-3 !py-1.5 !text-xs font-bold"
+          >
+            Review & Match →
+          </Link>
+        </div>
+      )}
+
       {/* 4 Metric Cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (

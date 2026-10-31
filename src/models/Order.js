@@ -4,7 +4,7 @@ import mongoose from "mongoose";
  * Order — one purchase / sale of a product.
  * Status transitions: pending -> paid -> completed (or cancelled).
  */
-const ORDER_STATUSES = ["pending", "paid", "completed", "cancelled"];
+const ORDER_STATUSES = ["pending", "paid", "expired", "cancelled", "completed"];
 
 const OrderSchema = new mongoose.Schema(
   {
@@ -38,6 +38,24 @@ const OrderSchema = new mongoose.Schema(
       enum: ORDER_STATUSES,
       default: "pending",
       index: true,
+    },
+    // Payment window expiration (defaults to 10 minutes from creation)
+    expiresAt: {
+      type: Date,
+      default: () => new Date(Date.now() + 10 * 60 * 1000),
+      index: true,
+    },
+    // Customer-submitted 12-digit UPI Transaction / UTR reference
+    utr: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
+    },
+    // Timestamp when payment was confirmed by admin
+    paidAt: {
+      type: Date,
+      default: null,
     },
     // Snapshot of selected duration plan (if applicable)
     plan: {

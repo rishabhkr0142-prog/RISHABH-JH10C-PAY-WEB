@@ -1,6 +1,5 @@
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
-import { ensureSeedProducts } from "@/lib/seed";
 import { toPlainText } from "@/lib/serialize";
 import ProductsPageClient from "./ProductsPageClient";
 
@@ -17,7 +16,6 @@ export default async function ProductsPage() {
   let products = [];
   try {
     await connectDB();
-    await ensureSeedProducts();
     const docs = await Product.find({
       $or: [{ active: true }, { available: true }, { active: { $exists: false } }],
     })

@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 
+export const dynamic = "force-dynamic";
+
 function slugify(text) {
   return String(text)
     .toLowerCase()

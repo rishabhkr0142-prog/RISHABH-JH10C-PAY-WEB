@@ -138,6 +138,11 @@ export default function ProductDetailClient({ product }) {
         throw new Error(data.error || "Failed to create order");
       }
 
+      if (data.checkoutUrl || data.orderId) {
+        router.push(data.checkoutUrl || `/checkout/${data.orderId}`);
+        return;
+      }
+
       await handlePayment(data.order);
       setOrderModal(
         data.order || {

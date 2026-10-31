@@ -9,6 +9,7 @@ import ProductsManager from "./ProductsManager";
  * /api/admin/products* and re-render via router.refresh().
  */
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AdminProductsPage() {
   await connectDB();

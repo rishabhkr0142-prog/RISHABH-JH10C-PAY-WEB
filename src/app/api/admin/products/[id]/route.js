@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 
+export const dynamic = "force-dynamic";
+
 function slugify(text) {
   return String(text)
     .toLowerCase()
@@ -158,16 +160,26 @@ export async function DELETE(request, { params }) {
 
     const deleted = await Product.findByIdAndDelete(id).lean();
     if (!deleted) {
-      return NextResponse.json({ error: "Product not found." }, { status: 404 });
+      return NextResponse.json({ error: "Product not found or already deleted." }, { status: 404 });
     }
 
     revalidatePath("/");
     revalidatePath("/products");
     revalidatePath("/admin/products");
+    revalidatePath(`/products/${id}`);
+    if (deleted.slug) {
+      revalidatePath(`/products/${deleted.slug}`);
+    }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      deleted: { _id: String(deleted._id), name: deleted.name },
+    });
   } catch (err) {
     console.error("DELETE /api/admin/products/[id]:", err);
-    return NextResponse.json({ error: "Could not delete product." }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Could not delete product." },
+      { status: 500 }
+    );
   }
 }

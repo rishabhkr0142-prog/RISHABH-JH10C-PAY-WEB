@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
@@ -12,7 +12,14 @@ export default function ProductsManager({ products = [] }) {
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const handleToggleActive = async (product) => {
     setBusyId(product._id);
@@ -28,9 +35,15 @@ export default function ProductsManager({ products = [] }) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Update failed");
       }
+      setToast({
+        type: "success",
+        message: `Product status updated to ${newStatus ? "Active" : "Inactive"}.`,
+      });
       router.refresh();
     } catch (err) {
-      setError(err.message);
+      const msg = err.message || "Failed to update status.";
+      setError(msg);
+      setToast({ type: "error", message: msg });
     } finally {
       setBusyId(null);
     }
@@ -38,8 +51,9 @@ export default function ProductsManager({ products = [] }) {
 
   const handleDelete = (product) => {
     setConfirmModal({
-      title: `Delete "${product.name}"?`,
-      message: "This will remove the product from the catalog. Existing orders referencing this product will be preserved. This action cannot be undone.",
+      title: `Permanently Delete "${product.name}"?`,
+      message:
+        "This will permanently delete the product from the MongoDB database. It will not come back automatically. Existing orders referencing this product will be preserved. This action cannot be undone.",
       onConfirm: async () => {
         setConfirmModal(null);
         setBusyId(product._id);
@@ -48,13 +62,19 @@ export default function ProductsManager({ products = [] }) {
           const res = await fetch(`/api/admin/products/${product._id}`, {
             method: "DELETE",
           });
+          const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.error || "Delete failed");
+            throw new Error(data.error || "Failed to delete product from database");
           }
+          setToast({
+            type: "success",
+            message: `"${product.name}" permanently deleted from MongoDB.`,
+          });
           router.refresh();
         } catch (err) {
-          setError(err.message);
+          const msg = err.message || "Failed to delete product.";
+          setError(msg);
+          setToast({ type: "error", message: msg });
         } finally {
           setBusyId(null);
         }
@@ -63,7 +83,41 @@ export default function ProductsManager({ products = [] }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Toast Alert Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
+            className={`fixed top-20 right-6 z-50 flex max-w-md items-center gap-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md text-xs font-semibold ${
+              toast.type === "success"
+                ? "border-emerald-500/40 bg-[#06150b]/95 text-emerald-300"
+                : "border-red-500/40 bg-[#160505]/95 text-red-300"
+            }`}
+          >
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                toast.type === "success"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-red-500/20 text-red-400"
+              }`}
+            >
+              {toast.type === "success" ? "✓" : "!"}
+            </span>
+            <span className="flex-1 leading-relaxed">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 text-neutral-400 hover:text-white transition"
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

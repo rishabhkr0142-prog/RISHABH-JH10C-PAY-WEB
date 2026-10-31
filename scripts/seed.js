@@ -1,6 +1,91 @@
-import connectDB from "@/lib/db";
-import Product from "@/models/Product";
+/**
+ * Manual Database Seeding Script
+ * 
+ * Usage:
+ *   npm run seed
+ *   or
+ *   node scripts/seed.js
+ * 
+ * Note: This script will NEVER overwrite or re-seed if products already exist in the database.
+ * It is completely decoupled from the web application and never called automatically.
+ */
 
+const mongoose = require("mongoose");
+const fs = require("fs");
+const path = require("path");
+
+// 1. Load environment variables from .env or .env.local
+function loadEnvironment() {
+  const rootDir = path.resolve(__dirname, "..");
+  const candidateFiles = [".env.local", ".env"];
+
+  for (const fileName of candidateFiles) {
+    const fullPath = path.join(rootDir, fileName);
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, "utf-8");
+      content.split(/\r?\n/).forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) return;
+        const eqIdx = trimmed.indexOf("=");
+        if (eqIdx !== -1) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if (
+            (val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))
+          ) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      });
+    }
+  }
+}
+
+loadEnvironment();
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error("❌ Error: MONGODB_URI is not defined in .env or .env.local");
+  process.exit(1);
+}
+
+// 2. Define Product Schema
+const ProductSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    description: { type: String, default: "" },
+    price: { type: Number, required: true, min: 0, default: 0 },
+    plans: {
+      type: [
+        {
+          label: { type: String, trim: true, default: "" },
+          days: { type: Number, default: 0, min: 0 },
+          price: { type: Number, required: true, min: 0, default: 0 },
+          stock: { type: Number, default: 10, min: 0 },
+        },
+      ],
+      default: [],
+    },
+    category: { type: String, default: "General", trim: true },
+    images: { type: [String], default: [] },
+    imageUrl: { type: String, default: "" },
+    features: { type: [String], default: [] },
+    stock: { type: Number, default: 10, min: 0 },
+    active: { type: Boolean, default: true },
+    available: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "products" }
+);
+
+const Product = mongoose.models.Product || mongoose.model("Product", ProductSchema);
+
+// 3. Sample Demo Data
 const SAMPLE_PRODUCTS = [
   {
     name: "Discord Nitro 1 Year (Gift Link)",
@@ -136,11 +221,37 @@ const SAMPLE_PRODUCTS = [
   },
 ];
 
-export async function ensureSeedProducts() {
-  await connectDB();
+async function runSeed() {
+  console.log("🔌 Connecting to MongoDB...");
+  await mongoose.connect(MONGODB_URI, {
+    bufferCommands: false,
+    serverSelectionTimeoutMS: 10000,
+  });
+
+  console.log("🔍 Checking existing products in MongoDB...");
   const count = await Product.countDocuments();
-  if (count === 0) {
-    console.log("Seeding initial products into MongoDB...");
-    await Product.insertMany(SAMPLE_PRODUCTS);
+
+  if (count > 0) {
+    console.log(`ℹ️ Database already has ${count} product(s).`);
+    console.log("🛡️ Skipping seed to prevent overwriting or re-inserting deleted products.");
+    await mongoose.disconnect();
+    process.exit(0);
   }
+
+  console.log("📦 No products found. Seeding 6 default sample products...");
+  await Product.insertMany(SAMPLE_PRODUCTS);
+  console.log("✅ Successfully seeded sample products into MongoDB.");
+
+  await mongoose.disconnect();
+  console.log("👋 Disconnected from MongoDB.");
+  process.exit(0);
 }
+
+runSeed().catch(async (err) => {
+  console.error("❌ Seeding failed:", err);
+  try {
+    await mongoose.disconnect();
+  } catch (e) {}
+  process.exit(1);
+});
+

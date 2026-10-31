@@ -127,15 +127,24 @@ NEXT_PUBLIC_CURRENCY=₹
 
 ---
 
-## 💳 Payment Integration (later)
+## 💳 UPI Instant Checkout & Payment Gateway
 
-Everything is ready for you to plug a provider in:
+The platform features an automated server-side UPI QR Code payment gateway with a 10-minute expiry window:
 
-- **`src/app/checkout/CheckoutClient.jsx`** — the `Confirm & Pay` button is the stub. Replace the `handlePayClick` placeholder with your flow:
-  - **Stripe** → create a Checkout Session server-side, redirect to `session.url`, then in the Stripe webhook create the `Order`, upsert the `Client`, and call `incrementStat("orders")`.
-  - **Razorpay / crypto / UPI links** → same pattern: collect the payment, then write the order server-side (never trust the client to write orders).
-- The order/client/stat write helpers already exist (see `src/models/*`, `src/lib/stats.js`) — the admin "Record Order" endpoint (`src/app/api/admin/orders/route.js`) is a working example of exactly what your webhook should do.
-- Prices are stored as numbers with `NEXT_PUBLIC_CURRENCY` used only for display, so any provider works.
+- **Server-Generated QR Code:** When a logged-in user clicks "Buy Now" on any product/plan, an order is generated with status `pending` and `expiresAt = now + 10 minutes`.
+- **UPI Deep Link:** Auto-generates `upi://pay?pa=UPI_ID&pn=UPI_NAME&am=AMOUNT&cu=INR&tn=ORDER_ID` rendered on the server via `qrcode` (no third-party gateway fee, 0% commission).
+- **Mobile One-Tap Pay:** Includes "Pay with UPI app" button opening GPay, PhonePe, Paytm, or BHIM directly on mobile devices.
+- **10-Minute Countdown Timer:** Live timer (`mm:ss`) with a dynamic progress bar turning red when under 60 seconds. Automatically deactivates the QR code and marks the order as `expired` at 00:00.
+- **UTR / Transaction Reference:** Users can submit their 12-digit UPI UTR number for manual/automated verification.
+- **Admin Verification:** Admin orders tab displays UTR, live expiry countdown, and one-click actions: **Mark Paid**, **Mark Completed**, **Cancel**.
+- **Real-time Polling:** The checkout page polls order status every 5 seconds, instantly transitioning to the green verified success screen when the admin confirms payment.
+
+### Environment Configuration:
+```env
+# Server-only UPI configuration (never exposed in client code)
+UPI_ID=your_upi_id@okaxis
+UPI_NAME="RISHABH JH10C PAY"
+```
 
 ---
 

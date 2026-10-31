@@ -30,9 +30,14 @@ export async function PATCH(request, { params }) {
       );
     }
 
+    const updates = { status: body.status };
+    if (body.status === "paid" || body.status === "completed") {
+      updates.paidAt = new Date();
+    }
+
     const order = await Order.findByIdAndUpdate(
       id,
-      { status: body.status },
+      updates,
       { new: true, runValidators: true }
     ).lean();
 
@@ -41,6 +46,8 @@ export async function PATCH(request, { params }) {
     }
 
     revalidatePath("/admin/orders");
+    revalidatePath("/dashboard");
+    revalidatePath(`/checkout/${id}`);
 
     return NextResponse.json({ ok: true, order: JSON.parse(JSON.stringify(order)) });
   } catch (err) {

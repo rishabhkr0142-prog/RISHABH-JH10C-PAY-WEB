@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatPrice, timeAgo } from "@/lib/format";
 
-const STATUSES = ["pending", "paid", "completed", "cancelled"];
+const STATUSES = ["pending", "paid", "completed", "expired", "cancelled"];
 
 export default function OrdersManager({ orders = [], products = [] }) {
   const router = useRouter();
@@ -157,6 +157,12 @@ export default function OrdersManager({ orders = [], products = [] }) {
         return (
           <span className="badge-theme px-2 py-0.5 text-[10px] font-semibold">
             paid
+          </span>
+        );
+      case "expired":
+        return (
+          <span className="inline-flex rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-neutral-400">
+            expired
           </span>
         );
       case "cancelled":
@@ -341,22 +347,37 @@ export default function OrdersManager({ orders = [], products = [] }) {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-theme-border/50 text-neutral-400">
-                  <th className="py-3 font-medium">Order ID</th>
+                  <th className="py-3 font-medium">Order ID & UTR</th>
                   <th className="py-3 font-medium">Customer</th>
                   <th className="py-3 font-medium">Product</th>
                   <th className="py-3 font-medium">Price</th>
-                  <th className="py-3 font-medium">Status</th>
+                  <th className="py-3 font-medium">Status & Timing</th>
                   <th className="py-3 font-medium">Time</th>
-                  <th className="py-3 text-right font-medium">Actions</th>
+                  <th className="py-3 text-right font-medium">Quick Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filteredOrders.map((order) => {
                   const isBusy = busyId === order._id;
+                  const isExpired = order.status === "expired" || (order.status === "pending" && order.expiresAt && new Date(order.expiresAt) <= new Date());
+                  const displayStatus = isExpired ? "expired" : order.status;
+
                   return (
                     <tr key={order._id} className="transition hover:bg-white/5">
                       <td className="py-3 font-mono text-neutral-300">
-                        #{String(order._id).slice(-8)}
+                        <div>#{String(order._id).slice(-8)}</div>
+                        {order.utr ? (
+                          <div
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-amber-300"
+                            title="12-digit UPI UTR"
+                          >
+                            <span>UTR:</span> {order.utr}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-neutral-600 block italic mt-0.5">
+                            No UTR yet
+                          </span>
+                        )}
                       </td>
                       <td className="py-3">
                         <p className="font-semibold text-white">{order.customerName || "Customer"}</p>
@@ -378,28 +399,60 @@ export default function OrdersManager({ orders = [], products = [] }) {
                         {formatPrice(order.price || order.amount)}
                       </td>
                       <td className="py-3">
-                        <select
-                          value={order.status}
-                          disabled={isBusy}
-                          onChange={(e) => handleStatus(order, e.target.value)}
-                          className="rounded border border-theme-border bg-black/60 px-2 py-1 text-[11px] font-semibold text-white outline-none focus:border-theme-border-hover"
-                        >
-                          {STATUSES.map((st) => (
-                            <option key={st} value={st}>
-                              {st}
-                            </option>
-                          ))}
-                        </select>
+                        <div>{renderBadge(displayStatus)}</div>
+                        {order.status === "pending" && order.expiresAt && !isExpired && (
+                          <span className="block mt-1 font-mono text-[10px] text-neutral-400">
+                            Expires: {new Date(order.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
+                        {order.paidAt && (
+                          <span className="block mt-1 font-mono text-[10px] text-emerald-400">
+                            Paid: {new Date(order.paidAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 text-neutral-400">{timeAgo(order.createdAt)}</td>
                       <td className="py-3 text-right">
-                        <button
-                          onClick={() => handleDelete(order)}
-                          disabled={isBusy}
-                          className="rounded border border-red-500/20 px-2.5 py-1 text-[11px] font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {order.status !== "paid" && order.status !== "completed" && (
+                            <button
+                              onClick={() => updateOrderStatus(order._id, "paid")}
+                              disabled={isBusy}
+                              className="rounded border border-emerald-500/30 bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-500 hover:text-black transition"
+                              title="Confirm payment received via UPI"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
+                          {order.status !== "completed" && (
+                            <button
+                              onClick={() => updateOrderStatus(order._id, "completed")}
+                              disabled={isBusy}
+                              className="rounded border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white hover:bg-white hover:text-black transition"
+                              title="Mark order delivery completed"
+                            >
+                              Mark Completed
+                            </button>
+                          )}
+                          {order.status !== "cancelled" && (
+                            <button
+                              onClick={() => updateOrderStatus(order._id, "cancelled")}
+                              disabled={isBusy}
+                              className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-[10px] font-medium text-neutral-400 hover:text-white transition"
+                              title="Cancel order"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(order)}
+                            disabled={isBusy}
+                            className="rounded border border-red-500/20 px-2 py-1 text-[10px] text-red-400 hover:bg-red-500/10 transition"
+                            title="Delete order record"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -75,7 +75,71 @@ export async function POST(request) {
       await incrementStat("users");
     }
 
-    // 3. Enforce 10-minute anti-spam cooldown (Admin is exempt)
+    // 3. Server-Side Price & Duration Plan Verification
+    const qty = Math.max(1, Number(quantity) || 1);
+    let unitPrice = Number(product.price) || 0;
+    let selectedPlanData = null;
+
+    if (Array.isArray(product.plans) && product.plans.length > 0) {
+      let matchedPlan = null;
+      if (planLabel) {
+        matchedPlan = product.plans.find(
+          (p) =>
+            String(p.label).trim().toLowerCase() === String(planLabel).trim().toLowerCase()
+        );
+      }
+      if (!matchedPlan && planDays !== undefined) {
+        matchedPlan = product.plans.find((p) => Number(p.days) === Number(planDays));
+      }
+      // If client didn't match or didn't supply plan, default to lowest price plan
+      if (!matchedPlan) {
+        matchedPlan = product.plans.reduce(
+          (min, p) => (Number(p.price) < Number(min.price) ? p : min),
+          product.plans[0]
+        );
+      }
+
+      unitPrice = Number(matchedPlan.price);
+      selectedPlanData = {
+        label:
+          matchedPlan.label ||
+          (matchedPlan.days === 0 ? "Lifetime" : `${matchedPlan.days} Days`),
+        days: Number(matchedPlan.days) || 0,
+        price: unitPrice,
+      };
+    }
+
+    const totalPrice = unitPrice * qty;
+
+    // 4. Reuse Existing Unexpired Pending Order for the same Product & Plan
+    const now = new Date();
+    const reuseFilter = {
+      $or: [
+        { discordId: session.user.id },
+        ...(userDoc?._id ? [{ user: userDoc._id }] : []),
+      ],
+      product: product._id,
+      status: "pending",
+      expiresAt: { $gt: now },
+    };
+
+    if (selectedPlanData?.label) {
+      reuseFilter["plan.label"] = selectedPlanData.label;
+    }
+
+    const existingPendingOrder = await Order.findOne(reuseFilter).sort({ createdAt: -1 });
+
+    if (existingPendingOrder) {
+      return NextResponse.json({
+        ok: true,
+        reused: true,
+        orderId: String(existingPendingOrder._id),
+        checkoutUrl: `/checkout/${existingPendingOrder._id}`,
+        order: toPlainText(existingPendingOrder),
+      });
+    }
+
+    // 5. Enforce 10-minute anti-spam cooldown for NEW orders (Admin is exempt)
     const isAdmin = Boolean(session.user.isAdmin);
     if (!isAdmin) {
       const cooldownMinutesSetting = await getSetting(
@@ -113,48 +177,14 @@ export async function POST(request) {
       }
     }
 
-    // 4. Server-Side Price & Duration Plan Verification
-    const qty = Math.max(1, Number(quantity) || 1);
-    let unitPrice = Number(product.price) || 0;
-    let selectedPlanData = null;
-
-    if (Array.isArray(product.plans) && product.plans.length > 0) {
-      let matchedPlan = null;
-      if (planLabel) {
-        matchedPlan = product.plans.find(
-          (p) =>
-            String(p.label).trim().toLowerCase() === String(planLabel).trim().toLowerCase()
-        );
-      }
-      if (!matchedPlan && planDays !== undefined) {
-        matchedPlan = product.plans.find((p) => Number(p.days) === Number(planDays));
-      }
-      // If client didn't match or didn't supply plan, default to lowest price plan
-      if (!matchedPlan) {
-        matchedPlan = product.plans.reduce(
-          (min, p) => (Number(p.price) < Number(min.price) ? p : min),
-          product.plans[0]
-        );
-      }
-
-      unitPrice = Number(matchedPlan.price);
-      selectedPlanData = {
-        label:
-          matchedPlan.label ||
-          (matchedPlan.days === 0 ? "Lifetime" : `${matchedPlan.days} Days`),
-        days: Number(matchedPlan.days) || 0,
-        price: unitPrice,
-      };
-    }
-
-    const totalPrice = unitPrice * qty;
-
+    // 6. Create the pending order with a 10-minute payment timer
     const order = await Order.create({
       user: userDoc._id,
       product: product._id,
       price: totalPrice,
       amount: totalPrice,
       status: "pending",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       productName: product.name,
       customerName: session.user.name || userDoc.username || "Discord User",
       email: session.user.email || userDoc.email || "",
@@ -164,7 +194,7 @@ export async function POST(request) {
       ...(selectedPlanData ? { plan: selectedPlanData } : {}),
     });
 
-    // 5. Update global store counters
+    // 7. Update global store counters
     await incrementStat("orders");
 
     revalidatePath("/dashboard");
@@ -174,6 +204,7 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       orderId: String(order._id),
+      checkoutUrl: `/checkout/${order._id}`,
       order: toPlainText(order),
     });
   } catch (err) {

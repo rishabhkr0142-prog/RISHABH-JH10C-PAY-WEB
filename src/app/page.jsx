@@ -1,9 +1,11 @@
 import connectDB from "@/lib/db";
 import { getPublicStats } from "@/lib/stats";
 import { getAllSettings } from "@/lib/settings";
+import { getLiveOffers } from "@/lib/offers";
 import User from "@/models/User";
 import Hero from "@/components/Hero";
 import StatsSection from "@/components/StatsSection";
+import OffersSection from "@/components/OffersSection";
 import CommunitySection from "@/components/CommunitySection";
 import FeaturesGrid from "@/components/FeaturesGrid";
 import HowItWorks from "@/components/HowItWorks";
@@ -17,23 +19,27 @@ export default async function HomePage() {
   let stats = { users: 0, orders: 0, clients: 0 };
   let communityData = { total: 0, latestAvatars: [] };
   let settings = {};
+  let offers = [];
 
   try {
     await connectDB();
-    const [fetchedStats, totalUsers, avatarUsers, fetchedSettings] = await Promise.all([
-      getPublicStats().catch(() => ({ users: 0, orders: 0, clients: 0 })),
-      User.countDocuments().catch(() => 0),
-      User.find({ avatar: { $exists: true, $nin: ["", null] } })
-        .sort({ createdAt: -1 })
-        .limit(12)
-        .select("username avatar -_id")
-        .lean()
-        .catch(() => []),
-      getAllSettings().catch(() => ({})),
-    ]);
+    const [fetchedStats, totalUsers, avatarUsers, fetchedSettings, fetchedOffers] =
+      await Promise.all([
+        getPublicStats().catch(() => ({ users: 0, orders: 0, clients: 0 })),
+        User.countDocuments().catch(() => 0),
+        User.find({ avatar: { $exists: true, $nin: ["", null] } })
+          .sort({ createdAt: -1 })
+          .limit(12)
+          .select("username avatar -_id")
+          .lean()
+          .catch(() => []),
+        getAllSettings().catch(() => ({})),
+        getLiveOffers().catch(() => []),
+      ]);
 
     stats = fetchedStats;
     settings = fetchedSettings || {};
+    offers = fetchedOffers || [];
 
     let userList = avatarUsers;
     if (userList.length < 6) {
@@ -70,7 +76,10 @@ export default async function HomePage() {
       {/* 2. Live Stats Strip right under hero */}
       <StatsSection stats={stats} />
 
-      {/* 3. Community section with overlapping Discord avatars */}
+      {/* 3. Time-limited offers (auto-hides when expired) */}
+      <OffersSection offers={offers} />
+
+      {/* 4. Community section with overlapping Discord avatars */}
       <CommunitySection communityData={communityData} />
 
       {/* 4. Features grid (6 monochrome cards) */}

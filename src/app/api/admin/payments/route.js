@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Payment from "@/models/Payment";
 import { toPlainText } from "@/lib/serialize";
@@ -11,11 +11,8 @@ export const dynamic = "force-dynamic";
  * Fetches all UPI payment webhook logs (Admin only).
  */
 export async function GET(request) {
-  const session = await getSession();
-
-  if (!session?.user?.isAdmin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
 
   try {
     await connectDB();

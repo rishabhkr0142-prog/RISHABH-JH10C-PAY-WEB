@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/session";
+import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Payment from "@/models/Payment";
 import Order from "@/models/Order";
@@ -15,11 +15,8 @@ export const dynamic = "force-dynamic";
  * Allows store admin to manually link an unclaimed UPI payment to an Order.
  */
 export async function POST(request, { params }) {
-  const session = await getSession();
-
-  if (!session?.user?.isAdmin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
 
   const { paymentId } = params || {};
   if (!paymentId || !/^[a-f\d]{24}$/i.test(paymentId)) {

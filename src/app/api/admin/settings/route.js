@@ -1,26 +1,21 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/session";
-import { isUserAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { getAllSettings, setSetting } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session || !isUserAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
 
   const settings = await getAllSettings();
   return NextResponse.json({ ok: true, settings });
 }
 
 export async function POST(request) {
-  const session = await getSession();
-  if (!session || !isUserAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
+  const guard = await requireAdmin();
+  if (guard instanceof NextResponse) return guard;
 
   try {
     const body = await request.json();

@@ -84,21 +84,6 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Auto-expire check
-    const now = new Date();
-    if (
-      order.status === "expired" ||
-      (order.status === "pending" && order.expiresAt && new Date(order.expiresAt) <= now)
-    ) {
-      if (order.status !== "expired") {
-        await Order.findByIdAndUpdate(order._id, { status: "expired" });
-      }
-      return NextResponse.json(
-        { error: "This order has expired. Please create a new order." },
-        { status: 400 }
-      );
-    }
-
     // 3. Parse and Validate 12-Digit UTR
     const body = await request.json().catch(() => ({}));
     const rawUtr = String(body.utr || "").trim();
@@ -145,6 +130,27 @@ export async function POST(request, { params }) {
         );
       }
 
+      // Check if order has expired
+      const now = new Date();
+      const isPastExpiry =
+        order.status === "expired" ||
+        (order.status === "pending" &&
+          order.expiresAt &&
+          new Date(order.expiresAt) <= now);
+
+      if (isPastExpiry) {
+        if (order.status !== "expired") {
+          await Order.findByIdAndUpdate(order._id, { status: "expired" });
+        }
+        return NextResponse.json(
+          {
+            error:
+              "This order has expired and no matching payment was received for this UTR. If you completed payment, please contact support.",
+          },
+          { status: 400 }
+        );
+      }
+
       // Not found in DB yet -> FamPay alert email may still be in transit
       return NextResponse.json(
         {
@@ -170,16 +176,16 @@ export async function POST(request, { params }) {
       );
     }
 
-    // 6. Verify payment window (createdAt <= payment.paidAt <= expiresAt)
+    // 6. Verify payment window (createdAt <= payment.paidAt <= expiresAt + grace buffer)
     const paidAtMs = new Date(payment.paidAt).getTime();
-    const createdAtMs = new Date(order.createdAt).getTime() - 60000; // 1-minute buffer for clock differences
-    const expiresAtMs = new Date(order.expiresAt).getTime() + 60000;
+    const createdAtMs = new Date(order.createdAt).getTime() - 120000; // 2-minute buffer for clock differences
+    const expiresAtMs = new Date(order.expiresAt).getTime() + 15 * 60000; // 15-minute buffer for transit latency
 
     if (paidAtMs < createdAtMs || paidAtMs > expiresAtMs) {
       return NextResponse.json(
         {
           error:
-            "Payment timestamp does not match the valid 10-minute order window.",
+            "Payment timestamp does not match the valid order time window.",
         },
         { status: 400 }
       );
@@ -208,7 +214,7 @@ export async function POST(request, { params }) {
     }
 
     const updatedOrder = await Order.findOneAndUpdate(
-      { _id: order._id, status: "pending" },
+      { _id: order._id, status: { $in: ["pending", "expired"] } },
       {
         $set: {
           status: "paid",

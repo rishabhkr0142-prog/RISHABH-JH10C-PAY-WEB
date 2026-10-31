@@ -150,13 +150,13 @@ export async function POST(request) {
     }
 
     // 4. Auto-Match Logic
-    // Find pending order matching:
-    // - status == 'pending'
+    // Find pending/recently-expired order matching:
+    // - status in ['pending', 'expired']
     // - amountPaise == payment.amountPaise
     // - createdAt <= payment.paidAt (with 30-second leeway for clock skew) <= expiresAt
     const paymentTime = paymentDate.getTime();
     const candidateOrders = await Order.find({
-      status: "pending",
+      status: { $in: ["pending", "expired"] },
       amountPaise: parsedAmountPaise,
       createdAt: { $lte: new Date(paymentTime + 30000) },
       expiresAt: { $gte: new Date(paymentTime - 30000) },
@@ -183,7 +183,7 @@ export async function POST(request) {
       if (claimedPayment) {
         // Atomically transition the order to 'paid'
         const updatedOrder = await Order.findOneAndUpdate(
-          { _id: targetOrder._id, status: "pending" },
+          { _id: targetOrder._id, status: { $in: ["pending", "expired"] } },
           {
             $set: {
               status: "paid",

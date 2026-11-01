@@ -7,6 +7,7 @@ import Order from "@/models/Order";
 import User from "@/models/User";
 import { incrementStat } from "@/lib/stats";
 import { toPlainText } from "@/lib/serialize";
+import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,18 @@ export async function POST(request, { params }) {
       console.error("Metric increment failed:", statErr);
     }
 
+    // Automatic license delivery (idempotent, one key per order).
+    let deliveredOrder = updatedOrder;
+    try {
+      const fulfillment = await completeOrder(updatedOrder._id);
+      if (fulfillment?.order) deliveredOrder = fulfillment.order;
+    } catch (fulfillmentErr) {
+      console.error(
+        "License fulfillment failed after manual payment match:",
+        fulfillmentErr?.message || fulfillmentErr
+      );
+    }
+
     revalidatePath(`/checkout/${order._id}`);
     revalidatePath("/dashboard");
     revalidatePath("/admin/orders");
@@ -106,7 +119,7 @@ export async function POST(request, { params }) {
     return NextResponse.json({
       ok: true,
       message: `Payment #${payment.utr} successfully matched to Order #${String(order._id).slice(-8)}!`,
-      order: toPlainText(updatedOrder),
+      order: toPlainText(deliveredOrder),
       payment: toPlainText(claimedPayment),
     });
   } catch (err) {

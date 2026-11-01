@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Order, { ORDER_STATUSES } from "@/models/Order";
 import { decrementStat } from "@/lib/stats";
+import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function PATCH(request, { params }) {
       updates.paidAt = new Date();
     }
 
-    const order = await Order.findByIdAndUpdate(
+    let order = await Order.findByIdAndUpdate(
       id,
       updates,
       { new: true, runValidators: true }
@@ -43,6 +44,19 @@ export async function PATCH(request, { params }) {
 
     if (!order) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    // Marking an order as paid triggers automatic license delivery.
+    if (body.status === "paid" && !order.licenseKey) {
+      try {
+        const fulfillment = await completeOrder(order._id);
+        if (fulfillment?.order) order = fulfillment.order;
+      } catch (fulfillmentErr) {
+        console.error(
+          "License fulfillment failed after admin mark-paid:",
+          fulfillmentErr?.message || fulfillmentErr
+        );
+      }
     }
 
     revalidatePath("/admin/orders");

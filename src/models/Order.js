@@ -4,7 +4,14 @@ import mongoose from "mongoose";
  * Order — one purchase / sale of a product.
  * Status transitions: pending -> paid -> completed (or cancelled).
  */
-const ORDER_STATUSES = ["pending", "paid", "expired", "cancelled", "completed"];
+const ORDER_STATUSES = [
+  "pending",
+  "paid",
+  "processing",
+  "expired",
+  "cancelled",
+  "completed",
+];
 
 const OrderSchema = new mongoose.Schema(
   {
@@ -105,6 +112,16 @@ const OrderSchema = new mongoose.Schema(
     productName: { type: String, default: "" },
     quantity: { type: Number, default: 1, min: 1 },
     notes: { type: String, default: "" },
+    // License delivery (one order = one key, generated server-side only)
+    licenseKey: { type: String },
+    deliveredAt: { type: Date, default: null },
+    licenseError: { type: String, default: "" },
+    licenseAttempts: { type: Number, default: 0, min: 0 },
+    // Discord DM delivery status
+    dmSent: { type: Boolean, default: false },
+    dmError: { type: String, default: "" },
+    dmSentAt: { type: Date, default: null },
+    dmLastResentAt: { type: Date, default: null },
   },
   { timestamps: true, collection: "orders" }
 );

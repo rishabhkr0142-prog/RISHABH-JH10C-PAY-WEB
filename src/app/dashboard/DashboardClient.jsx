@@ -25,6 +25,11 @@ export default function DashboardClient({
   const [statusFilter, setStatusFilter] = useState("all");
   const [copiedId, setCopiedId] = useState(null);
 
+  // License delivery actions
+  const [licenseBusyId, setLicenseBusyId] = useState(null);
+  const [resendBusyId, setResendBusyId] = useState(null);
+  const [licenseNotice, setLicenseNotice] = useState(null);
+
   // Selected Order for Details Modal
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -72,6 +77,69 @@ export default function DashboardClient({
     const secs = seconds % 60;
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
+
+  const showLicenseNotice = (type, text) => {
+    setLicenseNotice({ type, text });
+    setTimeout(() => setLicenseNotice(null), 5000);
+  };
+
+  const planExpiryLabel = (order) => {
+    const days = Number(order?.plan?.days) || 0;
+    if (!days) return "Lifetime (no expiry)";
+    const base = order?.deliveredAt || order?.paidAt;
+    const date = base ? new Date(base) : null;
+    if (!date || isNaN(date.getTime())) return `${days} days from delivery`;
+    date.setDate(date.getDate() + days);
+    return date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const handleRetryLicense = async (order) => {
+    setLicenseBusyId(order._id);
+    try {
+      const res = await fetch(`/api/orders/${order._id}/retry-license`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not generate license key");
+      showLicenseNotice("success", "License key generated successfully.");
+      router.refresh();
+    } catch (err) {
+      showLicenseNotice("error", err.message);
+    } finally {
+      setLicenseBusyId(null);
+    }
+  };
+
+  const handleResendDM = async (order) => {
+    setResendBusyId(order._id);
+    try {
+      const res = await fetch(`/api/orders/${order._id}/resend-dm`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not resend the DM");
+      showLicenseNotice("success", "License key sent to your Discord DM.");
+      router.refresh();
+    } catch (err) {
+      showLicenseNotice("error", err.message);
+    } finally {
+      setResendBusyId(null);
+    }
+  };
+
+  const licenseOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          o.licenseKey ||
+          ["completed", "paid", "processing"].includes(o.status)
+      ),
+    [orders]
+  );
 
   const maskEmail = (email) => {
     if (!email) return "Not provided";
@@ -166,6 +234,13 @@ export default function DashboardClient({
         return (
           <span className="badge-theme px-2.5 py-0.5 text-[10px] font-semibold">
             Paid
+          </span>
+        );
+      case "processing":
+        return (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-sky-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+            Processing
           </span>
         );
       case "expired":
@@ -478,7 +553,7 @@ export default function DashboardClient({
             </div>
 
             <div className="flex gap-1.5 overflow-x-auto">
-              {["all", "pending", "paid", "completed", "expired", "cancelled"].map((st) => (
+              {["all", "pending", "paid", "processing", "completed", "expired", "cancelled"].map((st) => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
@@ -493,6 +568,149 @@ export default function DashboardClient({
               ))}
             </div>
           </div>
+
+          {/* License Delivery Cards */}
+          {licenseOrders.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-white">License Keys</h2>
+                  <p className="text-xs text-neutral-400">
+                    Keys delivered for your verified payments. One key works on one device.
+                  </p>
+                </div>
+              </div>
+
+              {licenseNotice && (
+                <div
+                  className={`rounded-lg border p-3 text-xs ${
+                    licenseNotice.type === "success"
+                      ? "border-emerald-500/30 bg-emerald-950/40 text-emerald-300"
+                      : "border-red-500/30 bg-red-950/40 text-red-300"
+                  }`}
+                >
+                  {licenseNotice.text}
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {licenseOrders.map((order) => {
+                  const hasKey = Boolean(order.licenseKey);
+                  const isProcessing =
+                    !hasKey &&
+                    ["paid", "processing", "completed"].includes(order.status);
+                  const isBusy = licenseBusyId === order._id;
+
+                  return (
+                    <div key={order._id} className="glass p-5">
+                      <div className="flex items-start justify-between gap-3 border-b border-theme-border/50 pb-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-bold text-white">
+                            {order.productName || order.product?.name || "Product"}
+                          </h3>
+                          <p className="mt-0.5 text-[11px] text-neutral-400">
+                            {order.plan?.label || "Plan"}{" "}
+                            {Number(order.plan?.days) > 0
+                              ? `(${order.plan.days} days)`
+                              : "(Lifetime)"}
+                          </p>
+                        </div>
+                        <div className="shrink-0">{renderStatusBadge(order.status)}</div>
+                      </div>
+
+                      {hasKey ? (
+                        <div className="mt-4 space-y-3">
+                          <div>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                              License Key
+                            </span>
+                            <div className="mt-1.5 flex items-start gap-2">
+                              <code className="min-w-0 flex-1 break-all rounded-lg border border-theme-border bg-black/60 px-3 py-2 font-mono text-[11px] text-emerald-300">
+                                {order.licenseKey}
+                              </code>
+                              <button
+                                onClick={() =>
+                                  copyToClipboard(order.licenseKey, `key-${order._id}`)
+                                }
+                                className="shrink-0 rounded-lg border border-theme-border px-2.5 py-2 text-[11px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                              >
+                                {copiedId === `key-${order._id}` ? "Copied" : "Copy"}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1 text-[11px] text-neutral-400">
+                            <p>
+                              <span className="text-neutral-500">Expiry:</span>{" "}
+                              <span className="text-neutral-300">{planExpiryLabel(order)}</span>
+                            </p>
+                            <p className="text-amber-300/90">
+                              1 device only. HWID reset is not available.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <a
+                              href="/api/loader"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-primary !px-3 !py-1.5 !text-[11px] font-bold"
+                            >
+                              Download Loader
+                            </a>
+                            <a
+                              href={discordInvite}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-ghost !px-3 !py-1.5 !text-[11px]"
+                            >
+                              Support
+                            </a>
+                            <button
+                              onClick={() => handleResendDM(order)}
+                              disabled={resendBusyId === order._id}
+                              className="rounded-lg border border-theme-border px-3 py-1.5 text-[11px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                              title="Resend the license key to your Discord DM (once per 5 minutes)"
+                            >
+                              {resendBusyId === order._id ? "Sending..." : "Resend DM"}
+                            </button>
+                          </div>
+                          {order.dmSent === false && order.dmError && (
+                            <p className="text-[10px] text-amber-400/80">
+                              DM delivery failed. You can retry with Resend DM.
+                            </p>
+                          )}
+                        </div>
+                      ) : isProcessing ? (
+                        <div className="mt-4 space-y-3">
+                          <div className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] font-semibold text-sky-300">
+                            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+                            Processing your license key...
+                          </div>
+                          {order.licenseError && (
+                            <p className="text-[10px] text-red-300/90 break-words">
+                              {order.licenseError}
+                            </p>
+                          )}
+                          <button
+                            onClick={() => handleRetryLicense(order)}
+                            disabled={isBusy}
+                            className="btn-primary !px-3 !py-1.5 !text-[11px] font-bold"
+                          >
+                            {isBusy ? "Retrying..." : "Retry Key Generation"}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-4 text-[11px] text-neutral-500">
+                          No license key available for this order.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="glass p-6">
             {filteredOrders.length === 0 ? (
@@ -776,6 +994,51 @@ export default function DashboardClient({
                   <span className="text-neutral-400">Fulfillment Status:</span>
                   <div>{renderStatusBadge(selectedOrder.status)}</div>
                 </div>
+                {selectedOrder.licenseKey ? (
+                  <div className="border-t border-white/5 pt-3">
+                    <span className="mb-1.5 block text-neutral-400">License Key:</span>
+                    <div className="flex items-start gap-2">
+                      <code className="min-w-0 flex-1 break-all rounded-lg border border-theme-border bg-black/60 px-3 py-2 font-mono text-[11px] text-emerald-300">
+                        {selectedOrder.licenseKey}
+                      </code>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(
+                            selectedOrder.licenseKey,
+                            `modal-key-${selectedOrder._id}`
+                          )
+                        }
+                        className="shrink-0 rounded-lg border border-theme-border px-2.5 py-2 text-[11px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                      >
+                        {copiedId === `modal-key-${selectedOrder._id}` ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-amber-300/90">
+                      1 device only. HWID reset is not available.
+                    </p>
+                  </div>
+                ) : ["paid", "processing", "completed"].includes(
+                    selectedOrder.status
+                  ) ? (
+                  <div className="border-t border-white/5 pt-3">
+                    <div className="flex items-center gap-2 text-[11px] font-semibold text-sky-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+                      Processing your license key...
+                    </div>
+                    {selectedOrder.licenseError && (
+                      <p className="mt-1 text-[10px] text-red-300/90">
+                        {selectedOrder.licenseError}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => handleRetryLicense(selectedOrder)}
+                      disabled={licenseBusyId === selectedOrder._id}
+                      className="btn-primary mt-2 !px-3 !py-1.5 !text-[11px] font-bold"
+                    >
+                      {licenseBusyId === selectedOrder._id ? "Retrying..." : "Retry Key Generation"}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="flex justify-between">
                   <span className="text-neutral-400">Order Placed:</span>
                   <span className="text-white">

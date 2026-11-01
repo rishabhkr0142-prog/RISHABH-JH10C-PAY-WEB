@@ -8,6 +8,7 @@ import User from "@/models/User";
 import { rateLimit } from "@/lib/rate-limit";
 import { toPlainText } from "@/lib/serialize";
 import { incrementStat } from "@/lib/stats";
+import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +68,26 @@ export async function POST(request, { params }) {
       );
     }
 
-    // If order is already paid, return success immediately
+    // If order is already paid, return success immediately.
+    // If the key is still missing, kick off delivery once (idempotent).
     if (order.status === "paid" || order.status === "completed") {
+      let currentOrder = order;
+      if (!order.licenseKey && order.status === "paid") {
+        try {
+          const fulfillment = await completeOrder(order._id);
+          if (fulfillment?.order) currentOrder = fulfillment.order;
+        } catch (fulfillmentErr) {
+          console.error(
+            "License fulfillment retry on already-paid order failed:",
+            fulfillmentErr?.message || fulfillmentErr
+          );
+        }
+      }
+
       return NextResponse.json({
         ok: true,
         message: "Payment already verified successfully.",
-        order: toPlainText(order),
+        order: toPlainText(currentOrder),
       });
     }
 
@@ -250,6 +265,18 @@ export async function POST(request, { params }) {
       console.error("Metric update error:", metricErr);
     }
 
+    // Automatic license delivery (idempotent, one key per order).
+    let deliveredOrder = updatedOrder;
+    try {
+      const fulfillment = await completeOrder(updatedOrder._id);
+      if (fulfillment?.order) deliveredOrder = fulfillment.order;
+    } catch (fulfillmentErr) {
+      console.error(
+        "License fulfillment failed after UTR verification:",
+        fulfillmentErr?.message || fulfillmentErr
+      );
+    }
+
     revalidatePath(`/checkout/${order._id}`);
     revalidatePath("/dashboard");
     revalidatePath("/admin/orders");
@@ -258,7 +285,7 @@ export async function POST(request, { params }) {
     return NextResponse.json({
       ok: true,
       message: "Payment verified successfully",
-      order: toPlainText(updatedOrder),
+      order: toPlainText(deliveredOrder),
     });
   } catch (err) {
     console.error("POST /api/orders/[orderId]/verify-utr failed:", err);

@@ -7,6 +7,7 @@ import Order from "@/models/Order";
 import User from "@/models/User";
 import Client from "@/models/Client";
 import { incrementStat } from "@/lib/stats";
+import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
 
@@ -210,6 +211,16 @@ export async function POST(request) {
             await incrementStat("revenue", updatedOrder.price || 0);
           } catch (statErr) {
             console.error("Metric update error after payment match:", statErr);
+          }
+
+          // Automatic license delivery (idempotent, one key per order).
+          try {
+            await completeOrder(updatedOrder._id);
+          } catch (fulfillmentErr) {
+            console.error(
+              "License fulfillment failed after webhook match:",
+              fulfillmentErr?.message || fulfillmentErr
+            );
           }
 
           revalidatePath(`/checkout/${targetOrder._id}`);

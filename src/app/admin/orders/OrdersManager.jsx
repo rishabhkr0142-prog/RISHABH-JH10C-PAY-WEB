@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatPrice, timeAgo } from "@/lib/format";
 
-const STATUSES = ["pending", "paid", "completed", "expired", "cancelled"];
+const STATUSES = ["pending", "paid", "processing", "completed", "expired", "cancelled"];
 
 export default function OrdersManager({
   orders = [],
@@ -22,6 +22,8 @@ export default function OrdersManager({
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [confirmModal, setConfirmModal] = useState(null);
+  const [revealedKeys, setRevealedKeys] = useState({});
+  const [retryBusyId, setRetryBusyId] = useState(null);
 
   // Manual payment match modal
   const [matchingPayment, setMatchingPayment] = useState(null);
@@ -172,6 +174,42 @@ export default function OrdersManager({
     }
   };
 
+  const handleRetryLicense = async (order) => {
+    setRetryBusyId(order._id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/orders/${order._id}/retry-license`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "License retry failed");
+      }
+      setSuccessMsg(
+        data.alreadyCompleted
+          ? "This order already has a license key."
+          : "License key generated and delivered."
+      );
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRetryBusyId(null);
+    }
+  };
+
+  const maskKey = (key) => {
+    const value = String(key || "");
+    if (!value) return "";
+    if (value.length <= 8) return "•".repeat(value.length);
+    return `${value.slice(0, 4)}${"•".repeat(Math.min(10, value.length - 8))}${value.slice(-4)}`;
+  };
+
+  const toggleReveal = (orderId) => {
+    setRevealedKeys((prev) => ({ ...prev, [orderId]: !prev[orderId] }));
+  };
+
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const matchStatus = filterStatus === "all" || o.status === filterStatus;
@@ -225,6 +263,13 @@ export default function OrdersManager({
         return (
           <span className="badge-theme px-2 py-0.5 text-[10px] font-semibold">
             paid
+          </span>
+        );
+      case "processing":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+            processing
           </span>
         );
       case "expired":
@@ -514,6 +559,7 @@ export default function OrdersManager({
                     <th className="py-3 font-medium">Product</th>
                     <th className="py-3 font-medium">Price</th>
                     <th className="py-3 font-medium">Status & Timing</th>
+                    <th className="py-3 font-medium">License & DM</th>
                     <th className="py-3 font-medium">Time</th>
                     <th className="py-3 text-right font-medium">Quick Actions</th>
                   </tr>
@@ -576,6 +622,68 @@ export default function OrdersManager({
                               Paid: {new Date(order.paidAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
                           )}
+                        </td>
+                        <td className="py-3">
+                          <div className="min-w-[190px] space-y-1.5">
+                            {order.licenseKey ? (
+                              <div className="flex items-center gap-1.5">
+                                <code className="break-all rounded border border-theme-border bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300">
+                                  {revealedKeys[order._id]
+                                    ? order.licenseKey
+                                    : maskKey(order.licenseKey)}
+                                </code>
+                                <button
+                                  onClick={() => toggleReveal(order._id)}
+                                  className="shrink-0 text-[10px] font-semibold text-neutral-400 hover:text-white"
+                                  title={revealedKeys[order._id] ? "Hide key" : "Reveal full key"}
+                                >
+                                  {revealedKeys[order._id] ? "Hide" : "Reveal"}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] italic text-neutral-500">
+                                {order.status === "processing" ? "Generating key..." : "No key"}
+                              </span>
+                            )}
+
+                            {order.licenseError && !order.licenseKey && (
+                              <p
+                                className="max-w-[220px] truncate text-[10px] text-red-400"
+                                title={order.licenseError}
+                              >
+                                {order.licenseError}
+                              </p>
+                            )}
+
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              {order.dmSent ? (
+                                <span className="font-semibold text-emerald-400">DM sent</span>
+                              ) : (
+                                <span className="font-semibold text-neutral-500">DM pending</span>
+                              )}
+                              {!order.dmSent && order.dmError && (
+                                <span
+                                  className="max-w-[120px] truncate text-red-400"
+                                  title={order.dmError}
+                                >
+                                  {order.dmError}
+                                </span>
+                              )}
+                            </div>
+
+                            {!order.licenseKey &&
+                              ["paid", "processing", "completed"].includes(order.status) && (
+                                <button
+                                  onClick={() => handleRetryLicense(order)}
+                                  disabled={retryBusyId === order._id}
+                                  className="rounded border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500 hover:text-black transition disabled:opacity-50"
+                                >
+                                  {retryBusyId === order._id
+                                    ? "Retrying..."
+                                    : "Retry key generation"}
+                                </button>
+                              )}
+                          </div>
                         </td>
                         <td className="py-3 text-neutral-400">{timeAgo(order.createdAt)}</td>
                         <td className="py-3 text-right">

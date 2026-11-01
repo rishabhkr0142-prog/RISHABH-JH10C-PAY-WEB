@@ -5,6 +5,7 @@ import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import { toPlainText } from "@/lib/serialize";
+import { redactOrderLicense } from "@/lib/order-access";
 import CheckoutClient from "./CheckoutClient";
 
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ export default async function OrderCheckoutPage({ params }) {
     }
   }
 
-  const serializedOrder = toPlainText(order);
+  const serializedOrder = redactOrderLicense(toPlainText(order), session);
 
   return (
     <CheckoutClient

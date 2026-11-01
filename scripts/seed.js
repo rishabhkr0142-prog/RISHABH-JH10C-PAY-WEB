@@ -58,6 +58,7 @@ if (!MONGODB_URI) {
 const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
+    productKey: { type: String, default: "", trim: true, lowercase: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     description: { type: String, default: "" },
     price: { type: Number, required: true, min: 0, default: 0 },

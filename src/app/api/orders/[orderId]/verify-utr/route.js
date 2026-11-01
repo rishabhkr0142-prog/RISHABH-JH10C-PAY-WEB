@@ -7,6 +7,7 @@ import Payment from "@/models/Payment";
 import User from "@/models/User";
 import { rateLimit } from "@/lib/rate-limit";
 import { toPlainText } from "@/lib/serialize";
+import { redactOrderLicense } from "@/lib/order-access";
 import { incrementStat } from "@/lib/stats";
 import { completeOrder } from "@/lib/fulfillment";
 
@@ -87,7 +88,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({
         ok: true,
         message: "Payment already verified successfully.",
-        order: toPlainText(currentOrder),
+        order: redactOrderLicense(toPlainText(currentOrder), session),
       });
     }
 
@@ -133,7 +134,7 @@ export async function POST(request, { params }) {
           return NextResponse.json({
             ok: true,
             message: "Payment verified successfully",
-            order: toPlainText(order),
+            order: redactOrderLicense(toPlainText(order), session),
           });
         }
         return NextResponse.json(
@@ -285,7 +286,7 @@ export async function POST(request, { params }) {
     return NextResponse.json({
       ok: true,
       message: "Payment verified successfully",
-      order: toPlainText(deliveredOrder),
+      order: redactOrderLicense(toPlainText(deliveredOrder), session),
     });
   } catch (err) {
     console.error("POST /api/orders/[orderId]/verify-utr failed:", err);

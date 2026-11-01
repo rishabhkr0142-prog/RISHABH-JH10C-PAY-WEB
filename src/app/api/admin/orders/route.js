@@ -5,6 +5,7 @@ import connectDB from "@/lib/db";
 import Order, { ORDER_STATUSES } from "@/models/Order";
 import Product from "@/models/Product";
 import { incrementStat } from "@/lib/stats";
+import { normalizeProductKey } from "@/lib/product-keys";
 
 /**
  * POST /api/admin/orders — record an order manually (sales outside the site,
@@ -31,6 +32,14 @@ export async function POST(request) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
     }
 
+    const productKey = normalizeProductKey(product.productKey);
+    if (!productKey) {
+      return NextResponse.json(
+        { error: "Set this product's license app (uid/lib) in Products first." },
+        { status: 400 }
+      );
+    }
+
     const quantity = Math.max(1, Number(body?.quantity || 1) || 1);
     const providedAmount = Number(body?.amount);
     const amount =
@@ -49,7 +58,9 @@ export async function POST(request) {
       email: String(email || "").trim(),
       discordId: String(discordId || "").trim(),
       product: productId,
+      productId,
       productName: product.name,
+      productKey,
       quantity,
       price: amount,
       amount,

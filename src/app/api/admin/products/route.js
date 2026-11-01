@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
+import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,14 @@ export async function POST(request) {
     } = body || {};
 
     const active = body?.active !== undefined ? Boolean(body.active) : body?.available !== false;
+
+    const productKey = normalizeProductKey(body?.productKey);
+    if (body?.productKey && !productKey) {
+      return NextResponse.json(
+        { error: `productKey must be one of: ${PRODUCT_KEYS.join(", ")}` },
+        { status: 400 }
+      );
+    }
 
     if (!name || String(name).trim() === "") {
       return NextResponse.json({ error: "Product name is required." }, { status: 400 });
@@ -94,6 +103,7 @@ export async function POST(request) {
 
     const product = await Product.create({
       name: String(name).trim(),
+      productKey,
       slug: finalSlug,
       description: String(description).trim(),
       price: numericPrice,

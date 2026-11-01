@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { PRODUCT_KEYS, PRODUCT_LABELS } from "@/lib/product-keys";
 
 export default function ProductForm({ product, onClose }) {
   const isEdit = Boolean(product);
@@ -11,6 +12,7 @@ export default function ProductForm({ product, onClose }) {
   const [form, setForm] = useState({
     name: product?.name || "",
     slug: product?.slug || "",
+    productKey: product?.productKey || "",
     category: product?.category || "Tools",
     price: product?.price ?? "",
     description: product?.description || "",
@@ -195,6 +197,26 @@ export default function ProductForm({ product, onClose }) {
                 className="input"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="label">License App (auth panel)</label>
+            <select
+              value={form.productKey}
+              onChange={set("productKey")}
+              className="input"
+            >
+              <option value="">Not a license product</option>
+              {PRODUCT_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {PRODUCT_LABELS[key] || key} ({key})
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-neutral-500">
+              Choose which auth-panel app generates keys for this product. UID Bypass
+              and LIB Bypass must use different apps.
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

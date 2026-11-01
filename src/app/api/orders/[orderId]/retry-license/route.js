@@ -3,8 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
-import User from "@/models/User";
-import { isOrderOwner } from "@/lib/order-access";
+import { isLicenseOwner } from "@/lib/order-access";
 import { rateLimit } from "@/lib/rate-limit";
 import { retryOrderFulfillment } from "@/lib/fulfillment";
 import { toPlainText } from "@/lib/serialize";
@@ -46,16 +45,13 @@ export async function POST(request, { params }) {
   try {
     await connectDB();
 
-    const [order, userDoc] = await Promise.all([
-      Order.findById(orderId).lean(),
-      User.findOne({ discordId: session.user.id }).lean(),
-    ]);
+    const order = await Order.findById(orderId).lean();
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (!isOrderOwner(order, session, userDoc)) {
+    if (!isLicenseOwner(order, session)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

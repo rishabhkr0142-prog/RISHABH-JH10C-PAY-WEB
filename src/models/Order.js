@@ -110,6 +110,14 @@ const OrderSchema = new mongoose.Schema(
     email: { type: String, default: "", index: true },
     discordId: { type: String, default: "", index: true },
     productName: { type: String, default: "" },
+    // Snapshot of the product's license app key: "uid" or "lib".
+    productKey: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     quantity: { type: Number, default: 1, min: 1 },
     notes: { type: String, default: "" },
     // License delivery (one order = one key, generated server-side only)

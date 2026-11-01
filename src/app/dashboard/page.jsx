@@ -5,6 +5,7 @@ import User from "@/models/User";
 import Order from "@/models/Order";
 import Product from "@/models/Product"; // ensure Product model registered for populate
 import { toPlainText } from "@/lib/serialize";
+import { redactOrderLicense } from "@/lib/order-access";
 import DashboardClient from "./DashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,9 @@ export default async function DashboardPage({ searchParams }) {
       .sort({ createdAt: -1 })
       .lean();
 
-    orders = toPlainText(orderDocs);
+    orders = toPlainText(orderDocs).map((order) =>
+      redactOrderLicense(order, session)
+    );
     if (dbUser) {
       dbUser = toPlainText(dbUser);
     }

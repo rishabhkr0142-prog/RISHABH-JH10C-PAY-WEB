@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
-import User from "@/models/User";
-import { isOrderOwner } from "@/lib/order-access";
+import { isLicenseOwner } from "@/lib/order-access";
 import { sendLicenseDM } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
@@ -30,16 +29,13 @@ export async function POST(request, { params }) {
   try {
     await connectDB();
 
-    const [order, userDoc] = await Promise.all([
-      Order.findById(orderId),
-      User.findOne({ discordId: session.user.id }).lean(),
-    ]);
+    const order = await Order.findById(orderId);
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (!isOrderOwner(order, session, userDoc)) {
+    if (!isLicenseOwner(order, session)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

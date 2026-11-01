@@ -8,6 +8,8 @@
  * DISCORD_BOT_TOKEN is never logged or sent to the browser.
  */
 
+import { productLabel } from "@/lib/product-keys";
+
 const DISCORD_API = "https://discord.com/api/v10";
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -131,14 +133,23 @@ export async function sendLicenseDM({ discordId, order }) {
     String(process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || "").trim() ||
     "https://discord.gg/tvw2zFMyzA";
 
-  const productName = order?.productName || order?.product?.name || "Digital Product";
+  const productName =
+    productLabel(order?.productKey) ||
+    order?.productName ||
+    order?.product?.name ||
+    "Digital Product";
   const plan = planLabel(order);
 
   const fields = [
     {
       name: "Product",
-      value: `${productName} — ${plan}`,
+      value: productName,
       inline: false,
+    },
+    {
+      name: "Plan",
+      value: plan,
+      inline: true,
     },
     {
       name: "License Key",

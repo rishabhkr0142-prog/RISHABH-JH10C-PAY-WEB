@@ -30,6 +30,12 @@ export default function OrdersManager({
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [matchingBusy, setMatchingBusy] = useState(false);
 
+  // Legacy LIB orders that may hold a key from the wrong auth app
+  const [suspectOrders, setSuspectOrders] = useState([]);
+  const [suspectLoading, setSuspectLoading] = useState(false);
+  const [suspectError, setSuspectError] = useState("");
+  const [suspectNote, setSuspectNote] = useState("");
+
   const [form, setForm] = useState({
     customerName: "",
     email: "",
@@ -199,6 +205,27 @@ export default function OrdersManager({
     }
   };
 
+  const handleLoadSuspects = async () => {
+    setViewMode("suspects");
+    setSearch("");
+    setSuspectLoading(true);
+    setSuspectError("");
+    try {
+      const res = await fetch("/api/admin/orders/suspect-licenses");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not load suspect orders");
+      }
+      setSuspectOrders(data.orders || []);
+      setSuspectNote(data.note || "");
+    } catch (err) {
+      setSuspectError(err.message);
+      setSuspectOrders([]);
+    } finally {
+      setSuspectLoading(false);
+    }
+  };
+
   const maskKey = (key) => {
     const value = String(key || "");
     if (!value) return "";
@@ -364,6 +391,21 @@ export default function OrdersManager({
             </span>
           )}
         </button>
+
+        <button
+          onClick={handleLoadSuspects}
+          className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${
+            viewMode === "suspects"
+              ? "btn-primary !px-4 !py-2 !text-xs font-bold"
+              : "border border-red-500/30 bg-red-950/30 text-red-300 hover:bg-red-950/50"
+          }`}
+          title="List LIB Bypass orders that may have keys from the UID app"
+        >
+          Wrong-App Keys
+          {viewMode === "suspects" && !suspectLoading && (
+            <span className="ml-2 text-[10px] font-mono">({suspectOrders.length})</span>
+          )}
+        </button>
       </div>
 
       {/* ── Unclaimed Payments Alert Callout ── */}
@@ -500,6 +542,7 @@ export default function OrdersManager({
       </AnimatePresence>
 
       {/* ── Search & Filter Controls ── */}
+      {viewMode !== "suspects" && (
       <div className="glass flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1">
           <input
@@ -541,6 +584,7 @@ export default function OrdersManager({
           </div>
         )}
       </div>
+      )}
 
       {/* ── VIEW 1: ORDERS TABLE ── */}
       {viewMode === "orders" && (
@@ -844,6 +888,86 @@ export default function OrdersManager({
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── VIEW 4: LEGACY WRONG-APP LICENSE REPORT ── */}
+      {viewMode === "suspects" && (
+        <div className="glass p-6">
+          <div className="mb-4 flex items-start justify-between gap-4 border-b border-theme-border/50 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white">
+                LIB Bypass orders that may have UID-app keys
+              </h3>
+              <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">
+                {suspectNote ||
+                  "These completed LIB Bypass orders were created before per-product app mapping. Re-issue their keys on the LIB app manually."}
+              </p>
+            </div>
+            <button
+              onClick={handleLoadSuspects}
+              disabled={suspectLoading}
+              className="btn-ghost shrink-0 !px-3 !py-1.5 !text-[11px] disabled:opacity-50"
+            >
+              {suspectLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+
+          {suspectLoading ? (
+            <div className="py-12 text-center text-xs text-neutral-500">
+              Scanning completed orders...
+            </div>
+          ) : suspectError ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-950/40 p-3 text-xs text-red-300">
+              {suspectError}
+            </div>
+          ) : suspectOrders.length === 0 ? (
+            <div className="py-12 text-center text-xs text-neutral-500">
+              No suspect LIB Bypass orders found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-theme-border/50 text-neutral-400">
+                    <th className="py-3 font-medium">Order</th>
+                    <th className="py-3 font-medium">Product / Plan</th>
+                    <th className="py-3 font-medium">Discord ID</th>
+                    <th className="py-3 font-medium">Current Key</th>
+                    <th className="py-3 font-medium">Delivered</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {suspectOrders.map((order) => (
+                    <tr key={order._id} className="transition hover:bg-white/5">
+                      <td className="py-3 font-mono text-neutral-300">
+                        #{String(order._id).slice(-8)}
+                      </td>
+                      <td className="py-3">
+                        <p className="font-semibold text-white">{order.productName}</p>
+                        <span className="mt-0.5 inline-block rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                          {order.plan || (order.planDays ? `${order.planDays} days` : "Lifetime")}
+                        </span>
+                      </td>
+                      <td className="py-3 font-mono text-[11px] text-neutral-400">
+                        {order.discordId || "—"}
+                      </td>
+                      <td className="py-3">
+                        <code className="break-all rounded border border-theme-border bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300">
+                          {order.licenseKey}
+                        </code>
+                      </td>
+                      <td className="py-3 text-neutral-400">
+                        {order.deliveredAt
+                          ? new Date(order.deliveredAt).toLocaleString()
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

@@ -7,10 +7,12 @@ import Order from "@/models/Order";
 import User from "@/models/User";
 import { incrementStat } from "@/lib/stats";
 import { toPlainText } from "@/lib/serialize";
+import { redactOrderLicense } from "@/lib/order-access";
 import { getSetting } from "@/lib/settings";
 import { rateLimit } from "@/lib/rate-limit";
 import { getCouponOffer } from "@/lib/offers";
 import { calculateDiscount } from "@/lib/offer-utils";
+import { normalizeProductKey } from "@/lib/product-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,19 @@ export async function POST(request) {
     if (product.stock !== undefined && product.stock <= 0) {
       return NextResponse.json(
         { error: "Product is currently out of stock." },
+        { status: 400 }
+      );
+    }
+
+    // The license app is always taken from the server-side product record,
+    // never from the request body.
+    const productKey = normalizeProductKey(product.productKey);
+    if (!productKey) {
+      return NextResponse.json(
+        {
+          error:
+            "This product is not configured for automatic license delivery. Please contact support.",
+        },
         { status: 400 }
       );
     }
@@ -198,6 +213,16 @@ export async function POST(request) {
     const existingPendingOrder = await Order.findOne(reuseFilter).sort({ createdAt: -1 });
 
     if (existingPendingOrder) {
+      if (
+        existingPendingOrder.productKey !== productKey ||
+        existingPendingOrder.productName !== product.name
+      ) {
+        await Order.updateOne(
+          { _id: existingPendingOrder._id },
+          { $set: { productKey, productName: product.name } }
+        );
+      }
+
       const orderAmountPaise =
         existingPendingOrder.amountPaise || Math.round((Number(existingPendingOrder.price) || 0) * 100);
       const formattedAmount = (orderAmountPaise / 100).toFixed(2);
@@ -265,6 +290,7 @@ export async function POST(request) {
       status: "pending",
       expiresAt,
       productName: product.name,
+      productKey,
       customerName: session.user.name || userDoc.username || "Discord User",
       email: session.user.email || userDoc.email || "",
       discordId: session.user.id,
@@ -329,7 +355,11 @@ export async function GET() {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json({ ok: true, orders: toPlainText(orders) });
+    const safeOrders = toPlainText(orders).map((order) =>
+      redactOrderLicense(order, session)
+    );
+
+    return NextResponse.json({ ok: true, orders: safeOrders });
   } catch (err) {
     console.error("GET /api/orders failed:", err);
     return NextResponse.json(

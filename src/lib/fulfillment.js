@@ -71,7 +71,11 @@ export async function completeOrder(orderId) {
   // 2. Generate the license key server-side only.
   let licenseKey;
   try {
-    licenseKey = await generateKey(lockedOrder);
+    licenseKey = await generateKey(
+      lockedOrder.productKey,
+      lockedOrder.planId,
+      lockedOrder.plan
+    );
   } catch (err) {
     const error = safeError(err);
     await Order.updateOne(

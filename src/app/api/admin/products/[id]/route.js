@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
+import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,17 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ error: "Product slug already exists." }, { status: 400 });
       }
       updates.slug = newSlug;
+    }
+
+    if (body?.productKey !== undefined) {
+      const productKey = normalizeProductKey(body.productKey);
+      if (body.productKey && !productKey) {
+        return NextResponse.json(
+          { error: `productKey must be one of: ${PRODUCT_KEYS.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      updates.productKey = productKey;
     }
 
     if (body?.description !== undefined) {

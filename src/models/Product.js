@@ -7,6 +7,14 @@ import mongoose from "mongoose";
 const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
+    // License app this product belongs to: "uid" or "lib" (server-side only).
+    productKey: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     slug: {
       type: String,
       required: true,

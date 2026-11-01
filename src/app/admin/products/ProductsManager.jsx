@@ -6,6 +6,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import ProductForm from "./ProductForm";
 import { formatPrice } from "@/lib/format";
+import { PRODUCT_LABELS, normalizeProductKey } from "@/lib/product-keys";
 
 export default function ProductsManager({ products = [] }) {
   const router = useRouter();
@@ -204,6 +205,15 @@ export default function ProductsManager({ products = [] }) {
                         <span className="badge-theme px-2 py-0.5 text-[10px]">
                           {p.category || "General"}
                         </span>
+                        {normalizeProductKey(p.productKey) ? (
+                          <span className="mt-1.5 block text-[10px] font-semibold text-emerald-300">
+                            {PRODUCT_LABELS[normalizeProductKey(p.productKey)]}
+                          </span>
+                        ) : (
+                          <span className="mt-1.5 block text-[10px] text-amber-400/80">
+                            No license app
+                          </span>
+                        )}
                       </td>
                       <td
                         className="p-4 font-mono font-bold"

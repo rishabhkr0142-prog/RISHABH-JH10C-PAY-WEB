@@ -4,6 +4,7 @@ import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import { toPlainText } from "@/lib/serialize";
+import { redactOrderLicense } from "@/lib/order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json({
       ok: true,
-      order: toPlainText(order),
+      order: redactOrderLicense(toPlainText(order), session),
     });
   } catch (err) {
     console.error("GET /api/orders/[orderId] failed:", err);

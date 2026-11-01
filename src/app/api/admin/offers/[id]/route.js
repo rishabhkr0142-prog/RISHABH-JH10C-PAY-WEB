@@ -52,7 +52,15 @@ export async function PUT(request, { params }) {
     if (body?.discountLabel !== undefined) {
       updates.discountLabel = String(body.discountLabel || "").trim();
     }
-    if (body?.couponCode !== undefined) updates.couponCode = String(body.couponCode || "").trim();
+    if (body?.discountType !== undefined) {
+      updates.discountType = body.discountType === "fixed" ? "fixed" : "percent";
+    }
+    if (body?.discountValue !== undefined) {
+      updates.discountValue = Math.max(0, Number(body.discountValue) || 0);
+    }
+    if (body?.couponCode !== undefined) {
+      updates.couponCode = String(body.couponCode || "").trim().toUpperCase();
+    }
     if (body?.productName !== undefined) updates.productName = String(body.productName || "").trim();
     if (body?.imageUrl !== undefined) updates.imageUrl = String(body.imageUrl || "").trim();
     if (body?.productId !== undefined) {

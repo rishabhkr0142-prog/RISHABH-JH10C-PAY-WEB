@@ -26,8 +26,9 @@ export async function generateMetadata({ params }) {
   }
 }
 
-export default async function ProductDetailPage({ params }) {
+export default async function ProductDetailPage({ params, searchParams }) {
   const { id } = params;
+  const initialCouponCode = String(searchParams?.code || "").trim();
   let product = null;
 
   try {
@@ -48,5 +49,5 @@ export default async function ProductDetailPage({ params }) {
     notFound();
   }
 
-  return <ProductDetailClient product={product} />;
+  return <ProductDetailClient product={product} initialCouponCode={initialCouponCode} />;
 }

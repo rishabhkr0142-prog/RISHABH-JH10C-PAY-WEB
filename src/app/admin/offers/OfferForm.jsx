@@ -22,6 +22,8 @@ export default function OfferForm({ offer, products = [], onClose }) {
     description: offer?.description || "",
     badge: offer?.badge || "LIMITED TIME",
     discountLabel: offer?.discountLabel || "",
+    discountType: offer?.discountType || "percent",
+    discountValue: offer?.discountValue ?? "",
     couponCode: offer?.couponCode || "",
     productId: offer?.productId ? String(offer.productId) : "",
     productName: offer?.productName || "",
@@ -165,6 +167,36 @@ export default function OfferForm({ offer, products = [], onClose }) {
               className="input font-mono uppercase"
             />
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Discount Type</label>
+              <select
+                value={form.discountType}
+                onChange={set("discountType")}
+                className="input"
+              >
+                <option value="percent">Percentage (%)</option>
+                <option value="fixed">Flat amount (₹)</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Discount Value</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.discountValue}
+                onChange={set("discountValue")}
+                placeholder={form.discountType === "percent" ? "e.g. 30" : "e.g. 100"}
+                className="input"
+              />
+            </div>
+          </div>
+          <p className="-mt-2 text-[11px] leading-relaxed text-neutral-400">
+            Applied automatically when a client enters this coupon code on the product
+            page. Leave the value at 0 to use the discount label instead.
+          </p>
 
           <div>
             <label className="label">Linked Product (optional)</label>

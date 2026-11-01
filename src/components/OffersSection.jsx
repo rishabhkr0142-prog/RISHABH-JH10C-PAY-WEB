@@ -48,6 +48,9 @@ export default function OffersSection({ offers = [] }) {
             ? new Date(offer.endsAt).getTime() - (now || Date.now())
             : 0;
           const href = offer.productId ? `/products/${offer.productId}` : "/products";
+          const claimHref = offer.couponCode
+            ? `${href}?code=${encodeURIComponent(offer.couponCode)}`
+            : href;
 
           return (
             <motion.article
@@ -115,7 +118,7 @@ export default function OffersSection({ offers = [] }) {
                 <div className="mt-auto flex items-center justify-between border-t border-white/5 pt-4">
                   <span className="text-[11px] text-neutral-500">Auto-closes at expiry</span>
                   <Link
-                    href={href}
+                    href={claimHref}
                     className="btn-primary px-3 py-1 text-xs font-semibold"
                   >
                     Claim Offer

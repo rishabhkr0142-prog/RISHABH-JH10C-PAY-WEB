@@ -35,8 +35,51 @@ export function formatRemaining(ms) {
   return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
 }
 
-/** Convert a date to a value usable by <input type="datetime-local">. */
-export function toDateTimeLocal(value) {
+/**
+ * Resolve the numeric discount an offer grants.
+ * Prefers the explicit discountType/discountValue fields, and falls back to
+ * parsing the human readable discountLabel (e.g. "30% OFF" or "₹100 OFF")
+ * so older offers keep working.
+ */
+export function getOfferDiscountConfig(offer) {
+  if (!offer) return { type: "percent", value: 0 };
+
+  const explicit = Number(offer.discountValue) || 0;
+  if (explicit > 0) {
+    return {
+      type: offer.discountType === "fixed" ? "fixed" : "percent",
+      value: explicit,
+    };
+  }
+
+  const label = String(offer.discountLabel || "");
+  const percentMatch = label.match(/(\d+(?:\.\d+)?)\s*%/);
+  if (percentMatch) return { type: "percent", value: Number(percentMatch[1]) };
+
+  const fixedMatch = label.match(/(?:₹|rs\.?|inr)\s*(\d+(?:\.\d+)?)/i);
+  if (fixedMatch) return { type: "fixed", value: Number(fixedMatch[1]) };
+
+  return { type: "percent", value: 0 };
+}
+
+/**
+ * Discount amount for a given price. Never lets the payable price drop
+ * below ₹1 (a zero-rupee UPI request cannot be paid).
+ */
+export function calculateDiscount(price, offer) {
+  const base = Math.max(0, Number(price) || 0);
+  if (!offer || base <= 0) return 0;
+
+  const { type, value } = getOfferDiscountConfig(offer);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+
+  const raw = type === "fixed" ? value : (base * value) / 100;
+  const maxDiscount = base > 1 ? base - 1 : base;
+  const discount = Math.min(raw, maxDiscount);
+  return Math.round(discount * 100) / 100;
+}
+
+/** Convert a date to a value usable by <input type="datetime-local">. */export function toDateTimeLocal(value) {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";

@@ -11,7 +11,14 @@ const OfferSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     badge: { type: String, default: "LIMITED TIME", trim: true },
     discountLabel: { type: String, default: "", trim: true },
-    couponCode: { type: String, default: "", trim: true },
+    // Numeric discount applied when a client redeems couponCode
+    discountType: {
+      type: String,
+      enum: ["percent", "fixed"],
+      default: "percent",
+    },
+    discountValue: { type: Number, default: 0, min: 0 },
+    couponCode: { type: String, default: "", trim: true, uppercase: true },
     // Optional link to a catalog product (offer still shows without one)
     productId: {
       type: mongoose.Schema.Types.ObjectId,

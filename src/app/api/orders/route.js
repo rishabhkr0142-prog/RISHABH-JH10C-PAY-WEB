@@ -9,6 +9,8 @@ import { incrementStat } from "@/lib/stats";
 import { toPlainText } from "@/lib/serialize";
 import { getSetting } from "@/lib/settings";
 import { rateLimit } from "@/lib/rate-limit";
+import { getCouponOffer } from "@/lib/offers";
+import { calculateDiscount } from "@/lib/offer-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,8 @@ export async function POST(request) {
   try {
     await connectDB();
     const body = await request.json();
-    const { productId, planId, quantity = 1, notes = "", planLabel, planDays } = body || {};
+    const { productId, planId, quantity = 1, notes = "", planLabel, planDays, couponCode } =
+      body || {};
 
     if (!productId) {
       return NextResponse.json(
@@ -126,7 +129,27 @@ export async function POST(request) {
       };
     }
 
-    const totalPrice = unitPrice * qty;
+    const basePrice = unitPrice * qty;
+
+    // 3b. Re-validate any coupon on the server and apply the discount
+    let couponDiscount = 0;
+    let appliedCoupon = null;
+    const cleanCoupon = String(couponCode || "").trim();
+    if (cleanCoupon) {
+      const couponOffer = await getCouponOffer(cleanCoupon, product._id);
+      if (couponOffer) {
+        couponDiscount = calculateDiscount(basePrice, couponOffer);
+        if (couponDiscount > 0) {
+          appliedCoupon = {
+            code: couponOffer.couponCode,
+            discount: couponDiscount,
+            label: couponOffer.discountLabel || "",
+          };
+        }
+      }
+    }
+
+    const totalPrice = Math.round((basePrice - couponDiscount) * 100) / 100;
     // Calculate total amount in integer paise (₹1 = 100 paise)
     const totalAmountPaise = Math.round(totalPrice * 100);
 
@@ -161,6 +184,15 @@ export async function POST(request) {
       });
     } else if (selectedPlanData?.label) {
       reuseFilter.$and.push({ "plan.label": selectedPlanData.label });
+    }
+
+    // Only reuse an order that was created with the same coupon (or no coupon)
+    if (appliedCoupon) {
+      reuseFilter.$and.push({ couponCode: appliedCoupon.code });
+    } else {
+      reuseFilter.$and.push({
+        $or: [{ couponCode: { $exists: false } }, { couponCode: "" }],
+      });
     }
 
     const existingPendingOrder = await Order.findOne(reuseFilter).sort({ createdAt: -1 });
@@ -227,6 +259,9 @@ export async function POST(request) {
       amountPaise: totalAmountPaise,
       price: totalPrice,
       amount: totalPrice,
+      originalPrice: basePrice,
+      couponCode: appliedCoupon?.code || "",
+      couponDiscount: couponDiscount,
       status: "pending",
       expiresAt,
       productName: product.name,

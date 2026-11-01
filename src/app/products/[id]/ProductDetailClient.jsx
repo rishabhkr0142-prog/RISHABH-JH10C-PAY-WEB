@@ -7,9 +7,10 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
+import { calculateDiscount } from "@/lib/offer-utils";
 import { DiscordIcon } from "@/components/Navbar";
 
-export default function ProductDetailClient({ product }) {
+export default function ProductDetailClient({ product, initialCouponCode = "" }) {
   const router = useRouter();
   const { data: session, status } = useSession();
 
@@ -36,6 +37,15 @@ export default function ProductDetailClient({ product }) {
 
   const [selectedPlan, setSelectedPlan] = useState(lowestPricePlan);
   const currentPrice = selectedPlan ? Number(selectedPlan.price) : Number(product.price);
+
+  const [couponInput, setCouponInput] = useState(initialCouponCode || "");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const couponDiscount = appliedCoupon ? calculateDiscount(currentPrice, appliedCoupon) : 0;
+  const finalPrice = Math.max(0, Math.round((currentPrice - couponDiscount) * 100) / 100);
 
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [cooldownChecked, setCooldownChecked] = useState(false);
@@ -82,6 +92,68 @@ export default function ProductDetailClient({ product }) {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
+  const applyCoupon = async (rawCode) => {
+    const code = String(rawCode ?? couponInput).trim();
+    if (!code) {
+      setCouponError("Please enter a coupon code.");
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError("");
+
+    try {
+      const res = await fetch("/api/offers/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          productId: product._id,
+          ...(selectedPlan
+            ? {
+                planId: selectedPlan._id ? String(selectedPlan._id) : "",
+                planLabel: selectedPlan.label,
+                planDays: selectedPlan.days,
+              }
+            : {}),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Invalid coupon code.");
+
+      setAppliedCoupon({
+        code: data.code,
+        title: data.title,
+        discountLabel: data.discountLabel,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+      });
+      setCouponInput(data.code);
+      setToast({
+        type: "success",
+        text: `Coupon ${data.code} applied — you save ${formatPrice(data.discount)}.`,
+      });
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err.message || "Could not apply this coupon.");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError("");
+  };
+
+  // Auto-apply the code passed by a "Claim Offer" link.
+  useEffect(() => {
+    if (initialCouponCode) applyCoupon(initialCouponCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handlePayment(order) {
     console.log("[Payment Integration Placeholder] Order created with pending status:", order);
     return { ok: true, pendingGateway: true };
@@ -96,6 +168,14 @@ export default function ProductDetailClient({ product }) {
 
     if (!isAvailable) {
       setToast({ type: "error", text: "This product is currently out of stock or unavailable." });
+      return;
+    }
+
+    if (!agreedToTerms) {
+      setToast({
+        type: "error",
+        text: "Please tick the checkbox confirming you have read the product details before buying.",
+      });
       return;
     }
 
@@ -114,6 +194,7 @@ export default function ProductDetailClient({ product }) {
       const payload = {
         productId: product._id,
         quantity: 1,
+        ...(appliedCoupon?.code ? { couponCode: appliedCoupon.code } : {}),
         ...(selectedPlan
           ? {
               planLabel: selectedPlan.label,
@@ -284,13 +365,18 @@ export default function ProductDetailClient({ product }) {
           </h1>
 
           {/* Huge Price */}
-          <div className="mt-5 flex items-baseline gap-3">
+          <div className="mt-5 flex flex-wrap items-baseline gap-3">
             <span
               className="font-mono text-4xl font-extrabold tracking-tight sm:text-5xl"
               style={{ color: "var(--accent-primary)" }}
             >
-              {formatPrice(currentPrice)}
+              {formatPrice(finalPrice)}
             </span>
+            {couponDiscount > 0 && (
+              <span className="font-mono text-lg text-neutral-500 line-through">
+                {formatPrice(currentPrice)}
+              </span>
+            )}
             <span className="text-xs text-neutral-400">
               {selectedPlan
                 ? selectedPlan.days === 0
@@ -299,6 +385,11 @@ export default function ProductDetailClient({ product }) {
                 : "One-time payment"}
             </span>
           </div>
+          {couponDiscount > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-emerald-400">
+              Coupon {appliedCoupon.code} applied — you save {formatPrice(couponDiscount)}
+            </p>
+          )}
 
           {/* Nitro-Style Selectable Duration Plans */}
           {hasPlans && (
@@ -373,6 +464,67 @@ export default function ProductDetailClient({ product }) {
             </div>
           )}
 
+          {/* Coupon Code */}
+          <div className="mt-6 rounded-2xl border border-theme-border bg-theme-surface/60 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                Have a coupon code?
+              </span>
+              {appliedCoupon && (
+                <span className="text-[11px] font-semibold text-emerald-400">✓ Applied</span>
+              )}
+            </div>
+
+            {appliedCoupon ? (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3">
+                <div>
+                  <p className="font-mono text-sm font-bold text-emerald-300">
+                    {appliedCoupon.code}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-emerald-200/80">
+                    You save {formatPrice(couponDiscount)}
+                    {appliedCoupon.discountLabel ? ` · ${appliedCoupon.discountLabel}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  className="rounded border border-white/15 px-2.5 py-1 text-[11px] font-medium text-neutral-300 transition hover:bg-white/10 hover:text-white"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  applyCoupon();
+                }}
+                className="mt-3 flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => {
+                    setCouponInput(e.target.value.toUpperCase());
+                    setCouponError("");
+                  }}
+                  placeholder="Enter coupon code"
+                  className="w-full rounded-lg border border-theme-border bg-black/60 px-3 py-2 font-mono text-xs uppercase text-white placeholder-neutral-500 outline-none transition focus:border-theme-border-hover"
+                />
+                <button
+                  type="submit"
+                  disabled={couponLoading || !couponInput.trim()}
+                  className="btn-primary shrink-0 px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {couponLoading ? "Checking..." : "Apply Code"}
+                </button>
+              </form>
+            )}
+
+            {couponError && <p className="mt-2 text-[11px] text-red-400">{couponError}</p>}
+          </div>
+
           <p className="mt-5 text-sm leading-relaxed text-neutral-300">
             {product.description ||
               "High performance digital product verified and tested for immediate automated deployment."}
@@ -419,13 +571,34 @@ export default function ProductDetailClient({ product }) {
             </div>
           )}
 
+          {/* Mandatory confirmation before buying */}
+          <div className="mt-8 flex items-start gap-2.5 rounded-xl border border-theme-border bg-theme-surface/40 p-3">
+            <input
+              type="checkbox"
+              id="agree-terms"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-700 bg-neutral-900 text-white focus:ring-0"
+            />
+            <label
+              htmlFor="agree-terms"
+              className="text-[11px] leading-relaxed text-neutral-300"
+            >
+              I have read the product details and agree to the{" "}
+              <Link href="/support" className="font-medium text-white underline">
+                terms &amp; refund policy
+              </Link>
+              . I understand digital products cannot be refunded once delivered.
+            </label>
+          </div>
+
           {/* Buy Now CTA */}
-          <div className="mt-8 flex flex-col gap-3">
+          <div className="mt-4 flex flex-col gap-3">
             <button
               onClick={handleBuyNow}
-              disabled={loading || !isAvailable || cooldownRemaining > 0}
+              disabled={loading || !isAvailable || cooldownRemaining > 0 || !agreedToTerms}
               className={`btn-primary w-full py-3.5 text-sm font-bold shadow-lg ${
-                cooldownRemaining > 0 ? "opacity-60 cursor-not-allowed" : ""
+                cooldownRemaining > 0 || !agreedToTerms ? "opacity-60 cursor-not-allowed" : ""
               }`}
             >
               {loading ? (
@@ -438,11 +611,17 @@ export default function ProductDetailClient({ product }) {
               ) : !isAvailable ? (
                 "Out of Stock"
               ) : status === "authenticated" ? (
-                `Buy Now · ${formatPrice(currentPrice)}${selectedPlan?.label ? ` (${selectedPlan.label})` : ""}`
+                `Buy Now · ${formatPrice(finalPrice)}${selectedPlan?.label ? ` (${selectedPlan.label})` : ""}`
               ) : (
                 "Sign In with Discord to Buy"
               )}
             </button>
+
+            {!agreedToTerms && isAvailable && cooldownRemaining <= 0 && (
+              <p className="text-center text-[11px] text-amber-400/90">
+                Tick the checkbox above to enable Buy Now.
+              </p>
+            )}
 
             {status !== "authenticated" && (
               <p className="text-center text-[11px] text-neutral-500">

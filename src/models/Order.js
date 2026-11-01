@@ -94,6 +94,10 @@ const OrderSchema = new mongoose.Schema(
       days: { type: Number, default: 0 },
       price: { type: Number, default: 0 },
     },
+    // Coupon redemption snapshot (if a code was applied)
+    couponCode: { type: String, default: "", trim: true },
+    couponDiscount: { type: Number, default: 0, min: 0 },
+    originalPrice: { type: Number, default: 0, min: 0 },
     // Buyer details snapshot for resilience
     customerName: { type: String, default: "Guest" },
     email: { type: String, default: "", index: true },

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice, timeAgo } from "@/lib/format";
 import CountUp from "@/components/CountUp";
 import { DiscordIcon } from "@/components/Navbar";
+import WhatsAppSupport from "@/components/WhatsAppSupport";
 
 export default function DashboardClient({
   session,
@@ -266,6 +267,17 @@ export default function DashboardClient({
 
   const discordInvite = process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || "https://discord.gg/tvw2zFMyzA";
 
+  const whatsappMessageFor = (order) =>
+    [
+      "Hello, mujhe support chahiye.",
+      `Name: ${userName}`,
+      order ? `Order ID: #${String(order._id)}` : "",
+      order?.productName ? `Product: ${order.productName}` : "",
+      order?.plan?.label ? `Plan: ${order.plan.label}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-10 sm:px-8">
       {/* ── Welcome Header Bar ── */}
@@ -319,6 +331,11 @@ export default function DashboardClient({
             <DiscordIcon className="h-3.5 w-3.5" />
             Discord Desk
           </a>
+          <WhatsAppSupport
+            message={whatsappMessageFor(null)}
+            label="WhatsApp"
+            className="!px-3 !py-2 !text-xs"
+          />
         </div>
       </div>
 
@@ -454,7 +471,70 @@ export default function DashboardClient({
                 </Link>
               </div>
             ) : (
-              <div className="mt-4 overflow-x-auto">
+              <>
+              {/* Mobile cards */}
+              <div className="mt-4 space-y-2.5 sm:hidden">
+                {orders.slice(0, 5).map((order) => {
+                  const isExpired =
+                    order.status === "expired" ||
+                    (order.status === "pending" &&
+                      order.expiresAt &&
+                      new Date(order.expiresAt) <= new Date());
+                  const isPendingActive = order.status === "pending" && !isExpired;
+                  const displayStatus = isExpired ? "expired" : order.status;
+
+                  return (
+                    <div
+                      key={order._id}
+                      onClick={() => setSelectedOrder(order)}
+                      className="rounded-lg border border-theme-border bg-black/40 p-3.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">
+                            {order.productName || order.product?.name || "Product"}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[10px] text-neutral-500">
+                            #{String(order._id).slice(-8)}
+                          </p>
+                        </div>
+                        {renderStatusBadge(displayStatus)}
+                      </div>
+                      <div className="mt-2.5 flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm font-bold text-white">
+                          {formatPrice(order.price || order.amount)}
+                        </span>
+                        <span className="text-[11px] text-neutral-400">
+                          {timeAgo(order.createdAt)}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        {isPendingActive ? (
+                          <Link
+                            href={`/checkout/${order._id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="btn-primary min-h-[44px] w-full !text-xs font-bold"
+                          >
+                            Pay Now →
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOrder(order);
+                            }}
+                            className="btn-ghost min-h-[44px] w-full !text-xs"
+                          >
+                            View Details
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-theme-border/50 text-neutral-400">
@@ -525,6 +605,7 @@ export default function DashboardClient({
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </div>
@@ -666,6 +747,11 @@ export default function DashboardClient({
                             >
                               Support
                             </a>
+                            <WhatsAppSupport
+                              message={whatsappMessageFor(order)}
+                              label="WhatsApp"
+                              className="!px-3 !py-1.5 !text-[11px]"
+                            />
                             <button
                               onClick={() => handleResendDM(order)}
                               disabled={resendBusyId === order._id}
@@ -727,7 +813,75 @@ export default function DashboardClient({
                 </button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Mobile cards */}
+              <div className="space-y-2.5 sm:hidden">
+                {filteredOrders.map((order) => {
+                  const isExpired =
+                    order.status === "expired" ||
+                    (order.status === "pending" &&
+                      order.expiresAt &&
+                      new Date(order.expiresAt) <= new Date());
+                  const isPendingActive = order.status === "pending" && !isExpired;
+                  const displayStatus = isExpired ? "expired" : order.status;
+
+                  return (
+                    <div
+                      key={order._id}
+                      className="rounded-lg border border-theme-border bg-black/40 p-3.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">
+                            {order.productName || order.product?.name || "Product"}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[10px] text-neutral-500">
+                            #{String(order._id).slice(-8)}
+                            {order.utr ? ` · UTR ${order.utr}` : ""}
+                          </p>
+                        </div>
+                        {renderStatusBadge(displayStatus)}
+                      </div>
+                      <div className="mt-2.5 flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm font-bold text-white">
+                          {formatPrice(order.price || order.amount)}
+                        </span>
+                        <span className="text-[11px] text-neutral-400">
+                          {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        {isPendingActive ? (
+                          <Link
+                            href={`/checkout/${order._id}`}
+                            className="btn-primary min-h-[44px] flex-1 !text-xs font-bold"
+                          >
+                            Pay Now →
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="btn-ghost min-h-[44px] flex-1 !text-xs"
+                          >
+                            View Receipt
+                          </button>
+                        )}
+                        <WhatsAppSupport
+                          message={whatsappMessageFor(order)}
+                          label="Help"
+                          className="min-h-[44px]"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-theme-border/50 text-neutral-400">
@@ -830,6 +984,7 @@ export default function DashboardClient({
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </div>
@@ -1071,6 +1226,11 @@ export default function DashboardClient({
                   <DiscordIcon className="h-4 w-4" />
                   Discord Desk
                 </a>
+                <WhatsAppSupport
+                  message={whatsappMessageFor(selectedOrder)}
+                  label="WhatsApp"
+                  className="flex-1 !py-2.5 !text-xs"
+                />
                 <button
                   onClick={() => setSelectedOrder(null)}
                   className="btn-ghost flex-1 !py-2.5 !text-xs"

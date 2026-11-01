@@ -3,6 +3,7 @@ import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { getCouponOffer } from "@/lib/offers";
 import { calculateDiscount, getOfferDiscountConfig } from "@/lib/offer-utils";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,17 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request) {
   try {
+    // Prevent coupon-code brute forcing (20 attempts per minute per IP).
+    const forwarded = request.headers.get("x-forwarded-for") || "";
+    const ip = forwarded.split(",")[0].trim() || "unknown";
+    const rl = rateLimit(`coupon_validate_${ip}`, 20, 60 * 1000);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many coupon attempts. Please wait a minute." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const code = String(body?.code || "").trim();
     const productId = String(body?.productId || "").trim();

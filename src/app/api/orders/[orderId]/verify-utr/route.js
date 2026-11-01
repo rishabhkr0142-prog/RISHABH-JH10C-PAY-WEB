@@ -7,8 +7,7 @@ import Payment from "@/models/Payment";
 import User from "@/models/User";
 import { rateLimit } from "@/lib/rate-limit";
 import { toPlainText } from "@/lib/serialize";
-import { redactOrderLicense } from "@/lib/order-access";
-import { incrementStat } from "@/lib/stats";
+import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
@@ -54,11 +53,7 @@ export async function POST(request, { params }) {
     }
 
     // 2. Ownership verification (Order owner or Admin)
-    const isOwner =
-      order.userId === session.user.id ||
-      order.discordId === session.user.id ||
-      (userDoc?._id && String(order.user) === String(userDoc._id)) ||
-      (session.user.email && order.email === session.user.email);
+    const isOwner = isOrderOwner(order, session, userDoc);
 
     const isAdmin = Boolean(session.user.isAdmin);
 
@@ -111,10 +106,6 @@ export async function POST(request, { params }) {
         { status: 400 }
       );
     }
-
-    // Save submitted UTR on the order for reference
-    order.utr = cleanUtr;
-    await order.save();
 
     // 4. Find matching payment in database
     // Must match the exact clean 12-digit UTR and status 'unclaimed'
@@ -261,7 +252,6 @@ export async function POST(request, { params }) {
           { $set: { role: "client" }, $inc: { orderCount: 1, totalSpent: updatedOrder.price || 0 } }
         );
       }
-      await incrementStat("revenue", updatedOrder.price || 0);
     } catch (metricErr) {
       console.error("Metric update error:", metricErr);
     }

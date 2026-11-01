@@ -742,7 +742,8 @@ export default function OrdersManager({
                                 Mark Paid
                               </button>
                             )}
-                            {order.status !== "completed" && (
+                            {order.status !== "completed" &&
+                              Boolean(order.licenseKey) && (
                               <button
                                 onClick={() => updateOrderStatus(order._id, "completed")}
                                 disabled={isBusy}

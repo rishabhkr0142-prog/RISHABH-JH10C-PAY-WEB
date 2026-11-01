@@ -6,7 +6,6 @@ import Payment from "@/models/Payment";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import Client from "@/models/Client";
-import { incrementStat } from "@/lib/stats";
 import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
@@ -130,8 +129,8 @@ export async function POST(request) {
         receivedAt: new Date(),
       });
     } catch (err) {
-      // E11000 duplicate key error on unique `utr`
-      if (err?.code === 11000 || err?.name === "MongoServerError") {
+      // Only a true E11000 duplicate-key error on unique `utr` is idempotent.
+      if (err?.code === 11000) {
         isDuplicate = true;
         paymentDoc = await Payment.findOne({ utr: cleanUtr });
       } else {
@@ -208,7 +207,6 @@ export async function POST(request) {
                 { $set: { role: "client" }, $inc: { orderCount: 1, totalSpent: updatedOrder.price || 0 } }
               );
             }
-            await incrementStat("revenue", updatedOrder.price || 0);
           } catch (statErr) {
             console.error("Metric update error after payment match:", statErr);
           }

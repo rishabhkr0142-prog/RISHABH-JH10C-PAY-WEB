@@ -4,7 +4,7 @@ import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import { toPlainText } from "@/lib/serialize";
-import { redactOrderLicense } from "@/lib/order-access";
+import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +33,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const isOwner =
-      order.userId === session.user.id ||
-      order.discordId === session.user.id ||
-      (userDoc?._id && String(order.user) === String(userDoc._id)) ||
-      (session.user.email && order.email === session.user.email);
+    const isOwner = isOrderOwner(order, session, userDoc);
 
     const isAdmin = Boolean(session.user.isAdmin);
 

@@ -124,6 +124,15 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, product: JSON.parse(JSON.stringify(product)) });
   } catch (err) {
     console.error("POST /api/admin/products:", err);
-    return NextResponse.json({ error: err.message || "Could not create product." }, { status: 500 });
+    if (err?.code === 11000) {
+      return NextResponse.json(
+        { error: "A product with this slug already exists." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { error: "Could not create product. Please check the form and try again." },
+      { status: 500 }
+    );
   }
 }

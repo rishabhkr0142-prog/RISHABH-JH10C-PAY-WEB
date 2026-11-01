@@ -134,6 +134,12 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true, collection: "orders" }
 );
 
+// Compound indexes for the hot query paths (owner dashboard, webhook matching).
+OrderSchema.index({ discordId: 1, createdAt: -1 });
+OrderSchema.index({ userId: 1, createdAt: -1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ amountPaise: 1, status: 1, expiresAt: 1 });
+
 // Pre-save hook: sync amountPaise <-> price and userId <-> discordId
 OrderSchema.pre("save", function (next) {
   if (this.amountPaise !== undefined && this.amountPaise > 0) {

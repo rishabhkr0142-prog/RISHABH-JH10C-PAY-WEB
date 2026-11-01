@@ -142,7 +142,7 @@ html {
 body {
   background-color: var(--bg-base);
   color: #ededed;
-  font-family: var(--font-sans, "Geist", "Inter", -apple-system, sans-serif);
+  font-family: var(--font-sans, -apple-system, sans-serif);
   background-image:
     radial-gradient(
       1000px circle at 50% -10%,
@@ -371,6 +371,38 @@ body {
   .bg-theme-raised {
     background-color: var(--surface-raised);
   }
+}
+
+/* Mobile-first fixes */
+@media (max-width: 640px) {
+  /* 16px inputs prevent iOS Safari from zooming into focused fields */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Comfortable minimum touch targets */
+  .btn-primary,
+  .btn-ghost {
+    min-height: 44px;
+  }
+}
+
+/* Page transition (replaces framer-motion on the route template) */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: page-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Reduced Motion Safety */

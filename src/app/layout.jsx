@@ -1,3 +1,4 @@
+import { Inter, JetBrains_Mono } from "next/font/google";
 import AuthProvider from "@/components/AuthProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { FloatingThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -41,26 +42,28 @@ export const metadata = {
   robots: { index: true, follow: true },
 };
 
-const fontLinks = (
-  <>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      rel="preconnect"
-      href="https://fonts.gstatic.com"
-      crossOrigin="anonymous"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-  </>
-);
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
+});
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark" data-theme="mono">
+    <html
+      lang="en"
+      className={`dark ${inter.variable} ${jetbrainsMono.variable}`}
+      data-theme="mono"
+    >
       <head>
-        {fontLinks}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){ try { var t = localStorage.getItem('jh10c_theme') || 'mono'; document.documentElement.setAttribute('data-theme', t); } catch(e){} })();`,

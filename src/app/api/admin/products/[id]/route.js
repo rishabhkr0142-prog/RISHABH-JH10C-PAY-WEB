@@ -190,7 +190,7 @@ export async function DELETE(request, { params }) {
   } catch (err) {
     console.error("DELETE /api/admin/products/[id]:", err);
     return NextResponse.json(
-      { error: err.message || "Could not delete product." },
+      { error: "Could not delete product." },
       { status: 500 }
     );
   }

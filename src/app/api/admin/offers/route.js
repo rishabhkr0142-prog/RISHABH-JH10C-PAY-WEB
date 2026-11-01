@@ -77,6 +77,9 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, offer: JSON.parse(JSON.stringify(offer)) });
   } catch (err) {
     console.error("POST /api/admin/offers:", err);
-    return NextResponse.json({ error: err.message || "Could not create offer." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not create offer. Please check the form and try again." },
+      { status: 500 }
+    );
   }
 }

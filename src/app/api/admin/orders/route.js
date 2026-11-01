@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
-import Order, { ORDER_STATUSES } from "@/models/Order";
+import Order from "@/models/Order";
 import Product from "@/models/Product";
 import { incrementStat } from "@/lib/stats";
 import { normalizeProductKey } from "@/lib/product-keys";
+import { completeOrder } from "@/lib/fulfillment";
 
 /**
  * POST /api/admin/orders — record an order manually (sales outside the site,
@@ -47,13 +48,16 @@ export async function POST(request) {
         ? providedAmount
         : product.price * quantity;
 
-    const status = ORDER_STATUSES.includes(body?.status)
+    // Manual records may only start as pending, paid, expired or cancelled.
+    // "completed" is earned through the fulfillment pipeline, never set here.
+    const CREATABLE_STATUSES = ["pending", "paid", "expired", "cancelled"];
+    const status = CREATABLE_STATUSES.includes(body?.status)
       ? body.status
       : "pending";
 
     const { customerName, email, discordId, plan } = body || {};
 
-    await Order.create({
+    const order = await Order.create({
       customerName: String(customerName || "Guest").trim(),
       email: String(email || "").trim(),
       discordId: String(discordId || "").trim(),
@@ -67,6 +71,17 @@ export async function POST(request) {
       status,
       ...(plan && typeof plan === "object" ? { plan } : {}),
     });
+
+    if (status === "paid") {
+      try {
+        await completeOrder(order._id);
+      } catch (fulfillmentErr) {
+        console.error(
+          "Manual order license delivery failed:",
+          fulfillmentErr?.message || fulfillmentErr
+        );
+      }
+    }
 
     await incrementStat("orders");
     revalidatePath("/admin/orders");

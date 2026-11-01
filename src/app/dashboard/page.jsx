@@ -5,7 +5,7 @@ import User from "@/models/User";
 import Order from "@/models/Order";
 import Product from "@/models/Product"; // ensure Product model registered for populate
 import { toPlainText } from "@/lib/serialize";
-import { redactOrderLicense } from "@/lib/order-access";
+import { ownerFilterFor, redactOrderLicense } from "@/lib/order-access";
 import DashboardClient from "./DashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -34,12 +34,8 @@ export default async function DashboardPage({ searchParams }) {
       dbUser = await User.findOne({ discordId: session.user.id }).lean();
     }
 
-    // 2. Fetch orders strictly belonging to this logged-in user
-    const orQuery = [{ discordId: session.user.id }];
-    if (dbUser?._id) orQuery.push({ user: dbUser._id });
-    if (session.user.email) orQuery.push({ email: session.user.email });
-
-    const orderDocs = await Order.find({ $or: orQuery })
+    // 2. Fetch orders strictly belonging to this logged-in Discord account
+    const orderDocs = await Order.find(ownerFilterFor(session, dbUser))
       .populate("product")
       .sort({ createdAt: -1 })
       .lean();

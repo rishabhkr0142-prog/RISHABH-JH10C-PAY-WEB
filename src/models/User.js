@@ -18,6 +18,11 @@ const UserSchema = new mongoose.Schema(
       default: "user",
       index: true,
     },
+    // Lifetime purchase metrics (updated atomically after payment verification)
+    orderCount: { type: Number, default: 0, min: 0 },
+    totalSpent: { type: Number, default: 0, min: 0 },
+    // Last successful order creation — used for the atomic cooldown gate
+    lastOrderAt: { type: Date, default: null },
   },
   { timestamps: true, collection: "users" }
 );

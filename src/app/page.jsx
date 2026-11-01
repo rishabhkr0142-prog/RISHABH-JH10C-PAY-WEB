@@ -12,8 +12,8 @@ import HowItWorks from "@/components/HowItWorks";
 import FaqAccordion from "@/components/FaqAccordion";
 import FinalCta from "@/components/FinalCta";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// Cache the public landing page for 60s; writes call revalidatePath("/").
+export const revalidate = 60;
 
 export default async function HomePage() {
   let stats = { users: 0, orders: 0, clients: 0 };

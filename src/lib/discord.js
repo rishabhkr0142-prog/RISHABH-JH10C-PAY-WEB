@@ -134,9 +134,8 @@ export async function sendLicenseDM({ discordId, order }) {
     "https://discord.gg/tvw2zFMyzA";
 
   const productName =
-    productLabel(order?.productKey) ||
     order?.productName ||
-    order?.product?.name ||
+    productLabel(order?.productKey) ||
     "Digital Product";
   const plan = planLabel(order);
 

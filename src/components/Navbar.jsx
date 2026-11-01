@@ -21,7 +21,7 @@ function Logo() {
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-xs font-black tracking-tight text-white shadow-sm transition group-hover:scale-105">
         RJ
       </span>
-      <span className="font-sans text-sm font-bold tracking-tight text-white transition group-hover:text-neutral-300">
+      <span className="hidden font-sans text-sm font-bold tracking-tight text-white transition group-hover:text-neutral-300 min-[400px]:inline">
         RISHABH JH10C <span className="font-mono text-xs font-normal text-gradient">PAY WEB</span>
       </span>
     </Link>

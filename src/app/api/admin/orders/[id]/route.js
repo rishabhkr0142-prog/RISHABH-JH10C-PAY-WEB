@@ -31,8 +31,46 @@ export async function PATCH(request, { params }) {
       );
     }
 
+    const current = await Order.findById(id).lean();
+    if (!current) {
+      return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    // Enforce a sane state machine so an order can never jump from pending
+    // straight to completed without a verified payment and a license key.
+    const ALLOWED_TRANSITIONS = {
+      pending: ["paid", "cancelled", "expired"],
+      expired: ["paid", "cancelled"],
+      paid: ["completed", "cancelled"],
+      processing: ["paid", "completed"],
+      completed: [],
+      cancelled: ["paid"],
+    };
+    const allowed = ALLOWED_TRANSITIONS[current.status] || [];
+    if (!allowed.includes(body.status)) {
+      return NextResponse.json(
+        {
+          error: `Cannot change status from "${current.status}" to "${body.status}".`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      body.status === "completed" &&
+      !current.licenseKey
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "An order can only be completed after its license key has been delivered.",
+        },
+        { status: 400 }
+      );
+    }
+
     const updates = { status: body.status };
-    if (body.status === "paid" || body.status === "completed") {
+    if (body.status === "paid" && !current.paidAt) {
       updates.paidAt = new Date();
     }
 

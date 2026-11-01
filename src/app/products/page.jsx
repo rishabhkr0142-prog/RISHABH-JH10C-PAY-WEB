@@ -3,8 +3,8 @@ import Product from "@/models/Product";
 import { toPlainText } from "@/lib/serialize";
 import ProductsPageClient from "./ProductsPageClient";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// Catalog is public — cache for 30s and revalidate on product changes.
+export const revalidate = 30;
 
 export const metadata = {
   title: "Products & Services",

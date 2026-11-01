@@ -1,20 +1,34 @@
 import { isUserAdmin } from "@/lib/auth";
 
 /**
- * Server-side ownership check for an order.
- * A license key is only ever returned to its owner (or the store admin).
+ * Strict, server-side ownership helpers.
+ *
+ * A license key is only ever returned to the Discord account that placed the
+ * order (or the store admin). Email addresses are never used for ownership,
+ * because Discord accounts can change their email at any time.
  */
+
+/** Build a Mongo filter that matches only orders owned by this session. */
+export function ownerFilterFor(session, userDoc) {
+  if (!session?.user?.id) return null;
+  const discordId = String(session.user.id);
+
+  const clauses = [{ discordId }, { userId: discordId }];
+  if (userDoc?._id) clauses.push({ user: userDoc._id });
+
+  return { $or: clauses };
+}
+
+/** Server-side ownership check for an order document. */
 export function isOrderOwner(order, session, userDoc) {
   if (!order || !session?.user?.id) return false;
 
   const userId = String(session.user.id);
-  const email = String(session.user.email || "").toLowerCase();
 
   return Boolean(
     (order.userId && String(order.userId) === userId) ||
       (order.discordId && String(order.discordId) === userId) ||
-      (userDoc?._id && order.user && String(order.user) === String(userDoc._id)) ||
-      (email && order.email && String(order.email).toLowerCase() === email)
+      (userDoc?._id && order.user && String(order.user) === String(userDoc._id))
   );
 }
 

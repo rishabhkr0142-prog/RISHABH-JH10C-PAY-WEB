@@ -5,7 +5,7 @@ import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import { toPlainText } from "@/lib/serialize";
-import { redactOrderLicense } from "@/lib/order-access";
+import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 import CheckoutClient from "./CheckoutClient";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +37,7 @@ export default async function OrderCheckoutPage({ params }) {
     notFound();
   }
 
-  const isOwner =
-    order.discordId === session.user.id ||
-    (userDoc?._id && String(order.user) === String(userDoc._id)) ||
-    (session.user.email && order.email === session.user.email);
+  const isOwner = isOrderOwner(order, session, userDoc);
 
   const isAdmin = Boolean(session.user.isAdmin);
 

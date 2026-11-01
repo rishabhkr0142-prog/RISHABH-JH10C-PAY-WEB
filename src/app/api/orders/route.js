@@ -7,7 +7,7 @@ import Order from "@/models/Order";
 import User from "@/models/User";
 import { incrementStat } from "@/lib/stats";
 import { toPlainText } from "@/lib/serialize";
-import { redactOrderLicense } from "@/lib/order-access";
+import { ownerFilterFor, redactOrderLicense } from "@/lib/order-access";
 import { getSetting } from "@/lib/settings";
 import { rateLimit } from "@/lib/rate-limit";
 import { getCouponOffer } from "@/lib/offers";
@@ -45,9 +45,9 @@ export async function POST(request) {
     const { productId, planId, quantity = 1, notes = "", planLabel, planDays, couponCode } =
       body || {};
 
-    if (!productId) {
+    if (!productId || !/^[a-f\d]{24}$/i.test(String(productId))) {
       return NextResponse.json(
-        { error: "Product ID is required." },
+        { error: "A valid product ID is required." },
         { status: 400 }
       );
     }
@@ -240,7 +240,9 @@ export async function POST(request) {
       });
     }
 
-    // 5. Enforce 10-minute anti-spam cooldown for NEW orders (Admin is exempt)
+    // 5. Enforce the anti-spam cooldown for NEW orders (Admin is exempt).
+    //    The check below is advisory; the atomic `lastOrderAt` gate right after
+    //    it prevents two concurrent requests from both creating an order.
     const isAdmin = Boolean(session.user.isAdmin);
     if (!isAdmin) {
       const cooldownMinutesSetting = await getSetting(
@@ -249,6 +251,7 @@ export async function POST(request) {
       );
       const cooldownMinutes = Math.max(1, Number(cooldownMinutesSetting) || 10);
       const cooldownMs = cooldownMinutes * 60 * 1000;
+      const cutoff = new Date(Date.now() - cooldownMs);
 
       const latestOrder = await Order.findOne({ $or: userOr })
         .sort({ createdAt: -1 })
@@ -270,6 +273,34 @@ export async function POST(request) {
             { status: 429 }
           );
         }
+      }
+
+      // Atomic gate: only one request can win this update per cooldown window.
+      const gate = await User.findOneAndUpdate(
+        {
+          discordId: session.user.id,
+          $or: [
+            { lastOrderAt: { $exists: false } },
+            { lastOrderAt: null },
+            { lastOrderAt: { $lte: cutoff } },
+          ],
+        },
+        { $set: { lastOrderAt: new Date() } },
+        { new: false }
+      ).lean();
+
+      if (!gate) {
+        const waitSeconds = Math.max(
+          1,
+          Math.ceil(cooldownMs / 1000)
+        );
+        return NextResponse.json(
+          {
+            error: "An order is already being created. Please wait a moment and try again.",
+            remainingSeconds: waitSeconds,
+          },
+          { status: 429 }
+        );
       }
     }
 
@@ -331,7 +362,7 @@ export async function POST(request) {
 /**
  * GET /api/orders — Fetch orders belonging to the logged-in user.
  */
-export async function GET() {
+export async function GET(request) {
   const session = await getSession();
 
   if (!session?.user?.id) {
@@ -342,17 +373,17 @@ export async function GET() {
     await connectDB();
     const userDoc = await User.findOne({ discordId: session.user.id }).lean();
 
-    const query = {
-      $or: [
-        { discordId: session.user.id },
-        ...(userDoc?._id ? [{ user: userDoc._id }] : []),
-        ...(session.user.email ? [{ email: session.user.email }] : []),
-      ],
-    };
+    // Hard cap: never return an unbounded order list.
+    const url = new URL(request.url);
+    const requestedLimit = Number(url.searchParams.get("limit"));
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(200, Math.max(1, Math.floor(requestedLimit)))
+      : 100;
 
-    const orders = await Order.find(query)
+    const orders = await Order.find(ownerFilterFor(session, userDoc))
       .populate("product")
       .sort({ createdAt: -1 })
+      .limit(limit)
       .lean();
 
     const safeOrders = toPlainText(orders).map((order) =>

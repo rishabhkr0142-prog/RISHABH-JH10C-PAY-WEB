@@ -138,6 +138,6 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({ ok: true, deleted: { _id: String(deleted._id) } });
   } catch (err) {
     console.error("DELETE /api/admin/offers/[id]:", err);
-    return NextResponse.json({ error: err.message || "Could not delete offer." }, { status: 500 });
+    return NextResponse.json({ error: "Could not delete offer." }, { status: 500 });
   }
 }

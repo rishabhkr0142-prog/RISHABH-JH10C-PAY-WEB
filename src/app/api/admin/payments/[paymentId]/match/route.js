@@ -5,7 +5,6 @@ import connectDB from "@/lib/db";
 import Payment from "@/models/Payment";
 import Order from "@/models/Order";
 import User from "@/models/User";
-import { incrementStat } from "@/lib/stats";
 import { toPlainText } from "@/lib/serialize";
 import { completeOrder } from "@/lib/fulfillment";
 
@@ -53,6 +52,30 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
+    // Only unpaid orders may be matched — never re-pay a completed order.
+    if (!["pending", "expired"].includes(order.status)) {
+      return NextResponse.json(
+        {
+          error: `Order is "${order.status}" and cannot be matched to a new payment.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // The received amount must match the order total exactly.
+    const orderPaise =
+      order.amountPaise || Math.round((Number(order.price) || 0) * 100);
+    if (Number(payment.amountPaise) !== orderPaise) {
+      return NextResponse.json(
+        {
+          error: `Amount mismatch: payment is ₹${(Number(payment.amountPaise) / 100).toFixed(
+            2
+          )}, but the order total is ₹${(orderPaise / 100).toFixed(2)}.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Atomically claim payment
     const claimedPayment = await Payment.findOneAndUpdate(
       { _id: payment._id, status: "unclaimed" },
@@ -72,9 +95,9 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Update order status to paid
-    const updatedOrder = await Order.findByIdAndUpdate(
-      order._id,
+    // Update order status to paid only if it is still unpaid.
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: order._id, status: { $in: ["pending", "expired"] } },
       {
         $set: {
           status: "paid",
@@ -86,6 +109,16 @@ export async function POST(request, { params }) {
       { new: true }
     );
 
+    if (!updatedOrder) {
+      await Payment.findByIdAndUpdate(payment._id, {
+        $set: { status: "unclaimed", orderId: null },
+      });
+      return NextResponse.json(
+        { error: "Order was already paid by another request." },
+        { status: 409 }
+      );
+    }
+
     // Update user stats
     try {
       if (order.discordId) {
@@ -94,7 +127,6 @@ export async function POST(request, { params }) {
           { $set: { role: "client" }, $inc: { orderCount: 1, totalSpent: updatedOrder.price || 0 } }
         );
       }
-      await incrementStat("revenue", updatedOrder.price || 0);
     } catch (statErr) {
       console.error("Metric increment failed:", statErr);
     }

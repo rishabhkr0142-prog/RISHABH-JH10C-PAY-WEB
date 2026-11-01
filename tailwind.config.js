@@ -23,8 +23,7 @@ module.exports = {
       },
       fontFamily: {
         sans: [
-          "Geist",
-          "Inter",
+          "var(--font-sans)",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
@@ -36,7 +35,7 @@ module.exports = {
           "sans-serif",
         ],
         mono: [
-          "Geist Mono",
+          "var(--font-mono)",
           "ui-monospace",
           "SFMono-Regular",
           "Menlo",

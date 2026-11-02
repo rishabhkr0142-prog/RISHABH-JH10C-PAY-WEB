@@ -111,7 +111,7 @@ function UserMenu({ session }) {
             <div className="border-b border-theme-border/50 px-3 py-2">
               <p className="truncate text-xs font-semibold text-white">{name}</p>
               <p className="truncate text-[10px] text-neutral-400">
-                {session?.user?.email || "Discord Account"}
+                {session?.user?.email || "Store Account"}
               </p>
             </div>
 
@@ -301,7 +301,7 @@ export default function Navbar() {
                           {session?.user?.name}
                         </p>
                         <p className="truncate text-[10px] text-neutral-400">
-                          {session?.user?.email || "Discord User"}
+                          {session?.user?.email || "Member"}
                         </p>
                       </div>
                     </div>
@@ -328,7 +328,7 @@ export default function Navbar() {
                     className="btn-primary w-full justify-center !py-2.5 !text-xs font-semibold"
                   >
                     <DiscordIcon className="h-4 w-4" />
-                    Sign In with Discord
+                    Sign In
                   </Link>
                 )}
               </div>

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
+import { findUserForSession } from "@/lib/account";
+import { ownerFilterFor } from "@/lib/order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +25,21 @@ export async function GET() {
   try {
     await connectDB();
 
-    const hasLicense = await Order.exists({
-      status: "completed",
-      licenseKey: { $exists: true },
-      $or: [
-        { discordId: session.user.id },
-        { userId: session.user.id },
-      ],
-    });
+    const userDoc = await findUserForSession(session);
+    const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
+    const ownerFilter = ownerFilterFor(session, userDocLean);
+
+    const hasLicense =
+      Boolean(ownerFilter) &&
+      (await Order.exists({
+        $and: [
+          ownerFilter,
+          {
+            status: "completed",
+            licenseKey: { $exists: true, $ne: "" },
+          },
+        ],
+      }));
 
     if (!hasLicense) {
       return NextResponse.json(

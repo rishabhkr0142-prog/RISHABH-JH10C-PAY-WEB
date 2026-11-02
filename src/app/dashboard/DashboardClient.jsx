@@ -3,11 +3,27 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice, timeAgo } from "@/lib/format";
 import CountUp from "@/components/CountUp";
 import { DiscordIcon } from "@/components/Navbar";
 import WhatsAppSupport from "@/components/WhatsAppSupport";
+
+const LINK_ERROR_MESSAGES = {
+  discord_already_linked: "Discord is already linked to this account.",
+  discord_used_by_another_account:
+    "That Discord account is already linked to another store account.",
+  discord_not_configured: "Discord linking is not configured yet.",
+  discord_link_failed: "Discord linking failed. Please try again.",
+  google_already_linked: "Google is already linked to this account.",
+  google_used_by_another_account:
+    "That Google account is already linked to another store account.",
+  google_not_configured: "Google login is not configured yet.",
+  google_link_failed: "Google linking failed. Please try again.",
+  email_used_by_another_account:
+    "That email already belongs to another store account.",
+};
 
 export default function DashboardClient({
   session,
@@ -15,8 +31,11 @@ export default function DashboardClient({
   orders = [],
   stats = { totalOrders: 0, pendingOrders: 0, completedOrders: 0, totalSpent: 0 },
   initialTab = "overview",
+  linked = "",
+  linkError = "",
 }) {
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") || initialTab || "overview";
   const [activeTab, setActiveTab] = useState(tabParam);
@@ -30,6 +49,7 @@ export default function DashboardClient({
   const [licenseBusyId, setLicenseBusyId] = useState(null);
   const [resendBusyId, setResendBusyId] = useState(null);
   const [licenseNotice, setLicenseNotice] = useState(null);
+  const [accountNotice, setAccountNotice] = useState(null);
 
   // Selected Order for Details Modal
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -42,6 +62,28 @@ export default function DashboardClient({
       setActiveTab(tabParam);
     }
   }, [tabParam]);
+
+  useEffect(() => {
+    if (!linked && !linkError) return;
+
+    if (linked) {
+      setAccountNotice({
+        type: "success",
+        text:
+          linked === "google"
+            ? "Google account linked successfully."
+            : "Discord account linked successfully.",
+      });
+      updateSession?.();
+    } else {
+      setAccountNotice({
+        type: "error",
+        text: LINK_ERROR_MESSAGES[linkError] || "Account linking failed. Please try again.",
+      });
+    }
+
+    router.replace("/dashboard?tab=profile", { scroll: false });
+  }, [linked, linkError, updateSession, router]);
 
   useEffect(() => {
     fetch("/api/orders/cooldown")
@@ -169,7 +211,24 @@ export default function DashboardClient({
   const userAvatar = user.image || dbUser?.avatar;
   const userName = user.name || dbUser?.username || "Member";
   const userRole = session?.user?.isAdmin ? "Admin" : dbUser?.role === "client" ? "Client" : "User";
-  const discordId = user.id || dbUser?.discordId || "N/A";
+  const isRealDiscord = (value) => /^\d{15,25}$/.test(String(value || "").trim());
+  const linkedDiscordId =
+    dbUser?.authProviders?.discord?.id ||
+    (isRealDiscord(dbUser?.discordId) ? dbUser.discordId : "") ||
+    (isRealDiscord(user.discordId) ? user.discordId : "");
+  const googleSub = dbUser?.authProviders?.google?.sub || user.googleSub || "";
+  const googleEmail = dbUser?.authProviders?.google?.email || "";
+  const isDiscordLinked = Boolean(linkedDiscordId);
+  const isGoogleLinked = Boolean(googleSub);
+  const accountId = dbUser?._id || user.id || "N/A";
+  const headerAccountId = linkedDiscordId || accountId;
+  const discordId = linkedDiscordId || "Not linked";
+  const accountSources = [
+    isDiscordLinked ? "Discord" : null,
+    isGoogleLinked ? "Google" : null,
+  ]
+    .filter(Boolean)
+    .join(" + ") || "Store account";
   const memberSince = dbUser?.createdAt
     ? new Date(dbUser.createdAt).toLocaleDateString("en-US", {
         month: "short",
@@ -185,7 +244,7 @@ export default function DashboardClient({
       events.push({
         type: "account_created",
         title: "Account Created",
-        desc: "Authenticated via Discord and registered in store system.",
+        desc: `Registered in store system via ${accountSources}.`,
         date: new Date(dbUser.createdAt),
       });
     }
@@ -305,11 +364,11 @@ export default function DashboardClient({
             </div>
 
             <div className="mt-1 flex items-center gap-2 text-xs text-neutral-400">
-              <span className="font-mono">ID: {discordId}</span>
+              <span className="font-mono">ID: {headerAccountId}</span>
               <button
-                onClick={() => copyToClipboard(discordId, "user-id")}
+                onClick={() => copyToClipboard(headerAccountId, "user-id")}
                 className="text-[11px] text-neutral-400 hover:text-white"
-                title="Copy Discord ID"
+                title={linkedDiscordId ? "Copy Discord ID" : "Copy account ID"}
               >
                 {copiedId === "user-id" ? "✓ Copied" : "Copy"}
               </button>
@@ -681,6 +740,8 @@ export default function DashboardClient({
                     !hasKey &&
                     ["paid", "processing", "completed"].includes(order.status);
                   const isBusy = licenseBusyId === order._id;
+                  const needsDiscordLink =
+                    !isDiscordLinked && order.status === "completed";
 
                   return (
                     <div key={order._id} className="glass p-5">
@@ -752,15 +813,29 @@ export default function DashboardClient({
                               label="WhatsApp"
                               className="!px-3 !py-1.5 !text-[11px]"
                             />
-                            <button
-                              onClick={() => handleResendDM(order)}
-                              disabled={resendBusyId === order._id}
-                              className="rounded-lg border border-theme-border px-3 py-1.5 text-[11px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-50"
-                              title="Resend the license key to your Discord DM (once per 5 minutes)"
-                            >
-                              {resendBusyId === order._id ? "Sending..." : "Resend DM"}
-                            </button>
+                            {needsDiscordLink ? (
+                              <a
+                                href="/api/account/link/discord/start"
+                                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/20"
+                              >
+                                Discord link karo, DM paane ke liye
+                              </a>
+                            ) : (
+                              <button
+                                onClick={() => handleResendDM(order)}
+                                disabled={resendBusyId === order._id}
+                                className="rounded-lg border border-theme-border px-3 py-1.5 text-[11px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                                title="Resend the license key to your Discord DM (once per 5 minutes)"
+                              >
+                                {resendBusyId === order._id ? "Sending..." : "Resend DM"}
+                              </button>
+                            )}
                           </div>
+                          {needsDiscordLink && (
+                            <p className="text-[10px] text-sky-300/80">
+                              License dashboard me safe hai. DM delivery ke liye Discord link karo.
+                            </p>
+                          )}
                           {order.dmSent === false && order.dmError && (
                             <p className="text-[10px] text-amber-400/80">
                               DM delivery failed. You can retry with Resend DM.
@@ -1028,9 +1103,21 @@ export default function DashboardClient({
       {activeTab === "profile" && (
         <div className="glass mt-8 max-w-2xl p-8">
           <div className="border-b border-theme-border/50 pb-4">
-            <h2 className="text-base font-bold text-white">Discord Profile Information</h2>
-            <p className="text-xs text-neutral-400">Verified credentials authenticated from your Discord OAuth session</p>
+            <h2 className="text-base font-bold text-white">Account Profile</h2>
+            <p className="text-xs text-neutral-400">Verified sign-in methods and account details</p>
           </div>
+
+          {accountNotice && (
+            <div
+              className={`mt-4 rounded-lg border p-3 text-xs ${
+                accountNotice.type === "success"
+                  ? "border-emerald-500/30 bg-emerald-950/40 text-emerald-300"
+                  : "border-red-500/30 bg-red-950/40 text-red-300"
+              }`}
+            >
+              {accountNotice.text}
+            </div>
+          )}
 
           <div className="mt-6 flex items-center gap-4">
             <div className="relative h-16 w-16 overflow-hidden rounded-xl border border-theme-border bg-theme-surface">
@@ -1055,15 +1142,53 @@ export default function DashboardClient({
           </div>
 
           <div className="mt-8 space-y-4 rounded-lg border border-theme-border bg-black/60 p-5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-neutral-400">Discord ID</span>
-              <div className="flex items-center gap-2 font-mono text-white">
-                <span>{discordId}</span>
-                <button
-                  onClick={() => copyToClipboard(discordId, "profile-id")}
-                  className="text-neutral-500 hover:text-white"
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-neutral-400">Discord</span>
+              {isDiscordLinked ? (
+                <div className="flex items-center gap-2 font-mono text-white">
+                  <span>{linkedDiscordId}</span>
+                  <button
+                    onClick={() => copyToClipboard(linkedDiscordId, "profile-id")}
+                    className="text-neutral-500 hover:text-white"
+                  >
+                    {copiedId === "profile-id" ? "✓" : "Copy"}
+                  </button>
+                </div>
+              ) : (
+                <a
+                  href="/api/account/link/discord/start"
+                  className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-semibold text-sky-300 hover:bg-sky-500/20"
                 >
-                  {copiedId === "profile-id" ? "✓" : "Copy"}
+                  Link Discord
+                </a>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+              <span className="text-neutral-400">Google</span>
+              {isGoogleLinked ? (
+                <span className="font-mono text-white">
+                  {googleEmail ? maskEmail(googleEmail) : "Linked"}
+                </span>
+              ) : (
+                <a
+                  href="/api/account/link/google/start"
+                  className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-semibold text-sky-300 hover:bg-sky-500/20"
+                >
+                  Link Google
+                </a>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+              <span className="text-neutral-400">Account ID</span>
+              <div className="flex min-w-0 items-center gap-2 font-mono text-white">
+                <span className="truncate">{accountId}</span>
+                <button
+                  onClick={() => copyToClipboard(accountId, "profile-account-id")}
+                  className="shrink-0 text-neutral-500 hover:text-white"
+                >
+                  {copiedId === "profile-account-id" ? "✓" : "Copy"}
                 </button>
               </div>
             </div>
@@ -1080,9 +1205,13 @@ export default function DashboardClient({
 
             <div className="flex items-center justify-between border-t border-white/5 pt-3">
               <span className="text-neutral-400">Authentication Source</span>
-              <span className="text-white">Discord OAuth2 (RFC 9207)</span>
+              <span className="text-white">{accountSources}</span>
             </div>
           </div>
+
+          <p className="mt-4 text-[11px] text-neutral-500">
+            Link both Google and Discord to sign in either way and keep every order on one account.
+          </p>
         </div>
       )}
 

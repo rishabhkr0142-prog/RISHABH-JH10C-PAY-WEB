@@ -10,7 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "check:images": "node scripts/check-product-images.js"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",

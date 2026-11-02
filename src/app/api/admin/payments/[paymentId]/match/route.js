@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Payment from "@/models/Payment";
 import Order from "@/models/Order";
-import User from "@/models/User";
+import { markOrderBuyerAsClient } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { completeOrder } from "@/lib/fulfillment";
 
@@ -121,12 +121,7 @@ export async function POST(request, { params }) {
 
     // Update user stats
     try {
-      if (order.discordId) {
-        await User.findOneAndUpdate(
-          { discordId: order.discordId },
-          { $set: { role: "client" }, $inc: { orderCount: 1, totalSpent: updatedOrder.price || 0 } }
-        );
-      }
+      await markOrderBuyerAsClient(updatedOrder);
     } catch (statErr) {
       console.error("Metric increment failed:", statErr);
     }

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
-import User from "@/models/User";
+import { findUserForSession } from "@/lib/account";
+import { ownerFilterFor } from "@/lib/order-access";
+import { isUserAdmin } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +34,7 @@ export async function GET() {
   }
 
   // Admins are exempt from order cooldown
-  if (session.user.isAdmin) {
+  if (isUserAdmin(session)) {
     return NextResponse.json({
       loggedIn: true,
       isAdmin: true,
@@ -52,14 +54,19 @@ export async function GET() {
     const cooldownMinutes = Math.max(1, Number(cooldownMinutesSetting) || 10);
     const cooldownMs = cooldownMinutes * 60 * 1000;
 
-    const userDoc = await User.findOne({ discordId: session.user.id }).lean();
+    const userDoc = await findUserForSession(session);
+    const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
+    const query = ownerFilterFor(session, userDocLean);
 
-    const query = {
-      $or: [
-        { discordId: session.user.id },
-        ...(userDoc?._id ? [{ user: userDoc._id }] : []),
-      ],
-    };
+    if (!query) {
+      return NextResponse.json({
+        loggedIn: true,
+        isAdmin: false,
+        inCooldown: false,
+        remainingSeconds: 0,
+        cooldownMinutes,
+      });
+    }
 
     const latestOrder = await Order.findOne(query)
       .sort({ createdAt: -1 })

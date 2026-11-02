@@ -15,7 +15,7 @@ const ORDER_STATUSES = [
 
 const OrderSchema = new mongoose.Schema(
   {
-    // Buyer Discord ID
+    // Buyer account id (Mongo User._id for new orders, legacy Discord ID for old ones)
     userId: {
       type: String,
       default: "",
@@ -128,6 +128,8 @@ const OrderSchema = new mongoose.Schema(
     // Discord DM delivery status
     dmSent: { type: Boolean, default: false },
     dmError: { type: String, default: "" },
+    // Set when DM delivery was intentionally skipped (e.g. discord_not_linked)
+    dmSkipReason: { type: String, default: "" },
     dmSentAt: { type: Date, default: null },
     dmLastResentAt: { type: Date, default: null },
   },
@@ -140,7 +142,7 @@ OrderSchema.index({ userId: 1, createdAt: -1 });
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ amountPaise: 1, status: 1, expiresAt: 1 });
 
-// Pre-save hook: sync amountPaise <-> price and userId <-> discordId
+// Pre-save hook: sync amountPaise <-> price
 OrderSchema.pre("save", function (next) {
   if (this.amountPaise !== undefined && this.amountPaise > 0) {
     this.price = this.amountPaise / 100;
@@ -148,11 +150,6 @@ OrderSchema.pre("save", function (next) {
   } else if (this.price !== undefined && this.price > 0 && (!this.amountPaise || this.amountPaise === 0)) {
     this.amountPaise = Math.round(this.price * 100);
     this.amount = this.price;
-  }
-  if (!this.userId && this.discordId) {
-    this.userId = this.discordId;
-  } else if (!this.discordId && this.userId) {
-    this.discordId = this.userId;
   }
   if (!this.productId && this.product) {
     this.productId = this.product;

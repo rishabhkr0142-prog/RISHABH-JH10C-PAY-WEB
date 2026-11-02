@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import Reveal from "@/components/Reveal";
+import ProductImage from "@/components/ProductImage";
 import { isOfferLive, formatRemaining } from "@/lib/offer-utils";
 
 /**
@@ -62,22 +62,13 @@ export default function OffersSection({ offers = [] }) {
               className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] transition hover:border-white/25 hover:bg-[#111111]"
             >
               <div className="relative h-40 overflow-hidden border-b border-white/10 bg-black">
-                {offer.imageUrl ? (
-                  <Image
-                    src={offer.imageUrl}
-                    alt={offer.title}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-cover transition duration-300 group-hover:scale-105"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-[#111111]">
-                    <span className="font-mono text-2xl font-bold text-neutral-600">
-                      {(offer.title || "OFFER").slice(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-                )}
+                <ProductImage
+                  src={offer.imageUrl}
+                  alt={offer.title}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover transition duration-300 group-hover:scale-105"
+                  fallbackText={offer.title || "OFFER"}
+                />
 
                 <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-black/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300 backdrop-blur-md">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />

@@ -6,6 +6,7 @@ import Product from "@/models/Product";
 import Order from "@/models/Order";
 import User from "@/models/User";
 import { incrementStat } from "@/lib/stats";
+import { findUserForSession, isRealDiscordId, linkedDiscordId } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { ownerFilterFor, redactOrderLicense } from "@/lib/order-access";
 import { getSetting } from "@/lib/settings";
@@ -25,7 +26,7 @@ export async function POST(request) {
 
   if (!session?.user?.id) {
     return NextResponse.json(
-      { error: "You must be signed in with Discord to place an order." },
+      { error: "You must be signed in to place an order." },
       { status: 401 }
     );
   }
@@ -81,17 +82,29 @@ export async function POST(request) {
       );
     }
 
-    // 2. Fetch or create user in MongoDB
-    let userDoc = await User.findOne({ discordId: session.user.id });
+    // 2. Resolve the canonical MongoDB account for this session.
+    let userDoc = await findUserForSession(session);
     if (!userDoc) {
+      const legacyDiscordId = session.user.discordId || session.user.id;
+      if (!isRealDiscordId(legacyDiscordId)) {
+        return NextResponse.json(
+          { error: "Your session expired. Please sign in again." },
+          { status: 401 }
+        );
+      }
+
       userDoc = await User.create({
-        discordId: session.user.id,
-        username: session.user.name || session.user.id,
+        discordId: String(legacyDiscordId),
+        username: session.user.name || String(legacyDiscordId),
         avatar: session.user.image || "",
         email: session.user.email || "",
+        authProviders: { discord: { id: String(legacyDiscordId) } },
       });
       await incrementStat("users");
     }
+
+    const accountUserId = String(userDoc._id);
+    const discordId = linkedDiscordId(userDoc);
 
     // 3. Server-Side Price & Duration Plan Verification (Never trust client price)
     const qty = Math.max(1, Number(quantity) || 1);
@@ -175,9 +188,15 @@ export async function POST(request) {
     // 4. Reuse Existing Unexpired Pending Order for the same Product & Plan
     const now = new Date();
     const userOr = [
-      { userId: session.user.id },
-      { discordId: session.user.id },
-      ...(userDoc?._id ? [{ user: userDoc._id }] : []),
+      { userId: accountUserId },
+      { user: userDoc._id },
+      ...(String(session.user.id) !== accountUserId
+        ? [{ userId: String(session.user.id) }]
+        : []),
+      ...(session.user.discordId
+        ? [{ discordId: String(session.user.discordId) }]
+        : []),
+      ...(discordId ? [{ discordId }] : []),
     ];
     const productOr = [{ productId: product._id }, { product: product._id }];
 
@@ -278,7 +297,7 @@ export async function POST(request) {
       // Atomic gate: only one request can win this update per cooldown window.
       const gate = await User.findOneAndUpdate(
         {
-          discordId: session.user.id,
+          _id: userDoc._id,
           $or: [
             { lastOrderAt: { $exists: false } },
             { lastOrderAt: null },
@@ -307,7 +326,7 @@ export async function POST(request) {
     // 6. Create the pending order with 10-minute expiration & integer amountPaise
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const order = await Order.create({
-      userId: session.user.id,
+      userId: accountUserId,
       user: userDoc._id,
       productId: product._id,
       product: product._id,
@@ -322,9 +341,9 @@ export async function POST(request) {
       expiresAt,
       productName: product.name,
       productKey,
-      customerName: session.user.name || userDoc.username || "Discord User",
+      customerName: session.user.name || userDoc.username || "Customer",
       email: session.user.email || userDoc.email || "",
-      discordId: session.user.id,
+      discordId,
       quantity: qty,
       notes: String(notes || "").trim(),
       ...(selectedPlanData ? { plan: selectedPlanData } : {}),
@@ -371,7 +390,8 @@ export async function GET(request) {
 
   try {
     await connectDB();
-    const userDoc = await User.findOne({ discordId: session.user.id }).lean();
+    const userDoc = await findUserForSession(session);
+    const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
 
     // Hard cap: never return an unbounded order list.
     const url = new URL(request.url);
@@ -380,14 +400,14 @@ export async function GET(request) {
       ? Math.min(200, Math.max(1, Math.floor(requestedLimit)))
       : 100;
 
-    const orders = await Order.find(ownerFilterFor(session, userDoc))
+    const orders = await Order.find(ownerFilterFor(session, userDocLean))
       .populate("product")
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
 
     const safeOrders = toPlainText(orders).map((order) =>
-      redactOrderLicense(order, session)
+      redactOrderLicense(order, session, userDocLean)
     );
 
     return NextResponse.json({ ok: true, orders: safeOrders });

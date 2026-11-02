@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
+import ProductImage from "@/components/ProductImage";
 
 export default function ProductsPageClient({ initialProducts = [] }) {
   const [search, setSearch] = useState("");
@@ -177,24 +177,15 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                     {/* Image Area */}
                     <Link
                       href={`/products/${product._id || product.slug}`}
-                      className="relative block h-48 w-full overflow-hidden border-b border-theme-border bg-black"
+                      className="relative block aspect-[4/3] w-full overflow-hidden border-b border-theme-border bg-black"
                     >
-                      {imageSrc ? (
-                        <Image
-                          src={imageSrc}
-                          alt={product.name}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-theme-surface">
-                          <span className="font-mono text-2xl font-bold text-neutral-500">
-                            {(product.name || "P").slice(0, 2).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
+                      <ProductImage
+                        src={imageSrc}
+                        alt={product.name}
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        fallbackText={product.name}
+                      />
 
                       {/* Stock badge */}
                       <div className="absolute left-3 top-3">

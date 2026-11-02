@@ -8,18 +8,38 @@ import { DiscordIcon } from "@/components/Navbar";
 
 const AUTH_ERRORS = {
   OAuthCallback: {
-    title: "Discord Callback Failed",
+    title: "OAuth Callback Failed",
     description:
-      "Failed to complete OAuth callback with Discord. Please ensure your redirect URI matches http://localhost:3000/api/auth/callback/discord.",
+      "Could not complete the sign-in callback. Make sure both /api/auth/callback/google and /api/auth/callback/discord are registered for this exact domain.",
   },
   OAuthSignin: {
     title: "Sign-in Initialization Failed",
     description:
-      "Could not start Discord OAuth sign-in. Check your DISCORD_CLIENT_ID and network connection.",
+      "Could not start sign-in. Check your provider client ID, client secret, and network connection.",
   },
   OAuthCreateAccount: {
     title: "Account Creation Failed",
-    description: "Could not create user account in the database.",
+    description: "Could not create your user account in the database.",
+  },
+  OAuthAccountNotLinked: {
+    title: "Email Already Registered",
+    description:
+      "This email is already linked to another sign-in method. Sign in with the original method, then link the new one from Profile.",
+  },
+  AccountAlreadyLinked: {
+    title: "Account Already Linked",
+    description:
+      "This Google account is already linked to another store account. Sign in with the original method and link from Profile.",
+  },
+  DiscordAlreadyLinked: {
+    title: "Discord Already Linked",
+    description:
+      "That Discord account is already linked to another store account.",
+  },
+  EmailNotVerified: {
+    title: "Email Not Verified",
+    description:
+      "Your Google email is not verified, so it cannot be linked automatically. Verify it with Google and try again.",
   },
   Callback: {
     title: "Callback Processing Error",
@@ -27,22 +47,49 @@ const AUTH_ERRORS = {
   },
   AccessDenied: {
     title: "Access Denied",
-    description: "Access was denied or you cancelled the Discord authorization prompt.",
+    description: "You cancelled the Google or Discord authorization prompt.",
   },
   Configuration: {
     title: "Server Configuration Error",
     description:
-      "NextAuth server configuration issue. Please check NEXTAUTH_SECRET, DISCORD_CLIENT_ID, and DISCORD_CLIENT_SECRET.",
+      "NextAuth configuration issue. Check NEXTAUTH_SECRET, DISCORD_CLIENT_ID/SECRET, and GOOGLE_CLIENT_ID/SECRET.",
   },
   Verification: {
     title: "Verification Failed",
     description: "The verification token has expired or has already been used.",
+  },
+  DatabaseError: {
+    title: "Database Error",
+    description: "Could not save your account right now. Please try again.",
   },
   Default: {
     title: "Authentication Failed",
     description: "An unexpected error occurred during authentication.",
   },
 };
+
+function GoogleIcon({ className = "h-4 w-4" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.27-4.74 3.27-8.09Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.85 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.67-2.84Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.54 10.54 0 0 0 12 1a11 11 0 0 0-9.82 6.05l3.67 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
+      />
+    </svg>
+  );
+}
 
 function LoginContent() {
   const { data: session, status } = useSession();
@@ -69,6 +116,16 @@ function LoginContent() {
 
   const handleDiscordLogin = () => {
     signIn("discord", { callbackUrl });
+  };
+
+  const handleGoogleLogin = () => {
+    signIn("google", { callbackUrl });
+  };
+
+  const retryLogin = () => {
+    router.replace(
+      `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    );
   };
 
   return (
@@ -98,21 +155,45 @@ function LoginContent() {
           Welcome to <span className="text-gradient">JH10C</span>
         </h1>
         <p className="mt-2 text-xs leading-relaxed text-neutral-400">
-          Sign in with Discord to access your dashboard, order history, and instant fulfillment.
+          Sign in with Google or Discord to access your dashboard, order history, and instant fulfillment.
         </p>
 
         {errorInfo && (
           <div className="mt-5 rounded-lg border border-red-500/30 bg-red-950/40 p-3 text-left text-xs text-red-300">
             <p className="font-semibold">{errorInfo.title}</p>
             <p className="mt-1 text-[11px] text-red-400">{errorInfo.description}</p>
+            <button
+              onClick={retryLogin}
+              className="mt-3 rounded-md border border-red-400/30 px-3 py-1.5 text-[11px] font-semibold text-red-200 hover:bg-red-500/10"
+            >
+              Try again
+            </button>
           </div>
         )}
 
-        <div className="mt-6">
+        <div className="mt-6 space-y-2.5">
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-white/20 bg-white px-4 text-sm font-bold text-neutral-900 transition hover:bg-neutral-100 disabled:opacity-60"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-500 border-t-transparent" />
+                Signing In...
+              </span>
+            ) : (
+              <>
+                <GoogleIcon className="h-4 w-4" />
+                Continue with Google
+              </>
+            )}
+          </button>
+
           <button
             onClick={handleDiscordLogin}
             disabled={loading}
-            className="btn-primary w-full py-3 text-xs font-bold"
+            className="btn-primary flex min-h-[48px] w-full items-center justify-center gap-2 py-3 text-sm font-bold"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -120,16 +201,16 @@ function LoginContent() {
                 Signing In...
               </span>
             ) : (
-              <span className="flex items-center justify-center gap-2">
+              <>
                 <DiscordIcon className="h-4 w-4" />
                 Continue with Discord
-              </span>
+              </>
             )}
           </button>
         </div>
 
         <div className="mt-6 border-t border-theme-border/50 pt-4 text-[11px] text-neutral-500">
-          By signing in, you agree to our Terms of Service. Authentication is securely handled by Discord OAuth2.
+          By signing in, you agree to our Terms of Service. Authentication is securely handled by Google and Discord OAuth2.
         </div>
       </motion.div>
     </section>

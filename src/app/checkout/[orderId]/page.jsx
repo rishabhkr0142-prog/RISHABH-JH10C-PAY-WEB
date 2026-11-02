@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
-import User from "@/models/User";
+import { findUserForSession } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 import CheckoutClient from "./CheckoutClient";
@@ -30,14 +30,15 @@ export default async function OrderCheckoutPage({ params }) {
   }
 
   await connectDB();
-  const userDoc = await User.findOne({ discordId: session.user.id }).lean();
+  const userDoc = await findUserForSession(session);
+  const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
 
   let order = await Order.findById(orderId).populate("product").lean();
   if (!order) {
     notFound();
   }
 
-  const isOwner = isOrderOwner(order, session, userDoc);
+  const isOwner = isOrderOwner(order, session, userDocLean);
 
   const isAdmin = Boolean(session.user.isAdmin);
 
@@ -79,7 +80,7 @@ export default async function OrderCheckoutPage({ params }) {
     }
   }
 
-  const serializedOrder = redactOrderLicense(toPlainText(order), session);
+  const serializedOrder = redactOrderLicense(toPlainText(order), session, userDocLean);
 
   return (
     <CheckoutClient

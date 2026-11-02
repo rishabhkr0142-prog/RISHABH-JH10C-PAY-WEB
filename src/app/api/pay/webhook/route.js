@@ -4,8 +4,8 @@ import crypto from "crypto";
 import connectDB from "@/lib/db";
 import Payment from "@/models/Payment";
 import Order from "@/models/Order";
-import User from "@/models/User";
 import Client from "@/models/Client";
+import { markOrderBuyerAsClient } from "@/lib/account";
 import { completeOrder } from "@/lib/fulfillment";
 
 export const dynamic = "force-dynamic";
@@ -201,12 +201,7 @@ export async function POST(request) {
 
           // Update user client status & metrics
           try {
-            if (targetOrder.discordId) {
-              await User.findOneAndUpdate(
-                { discordId: targetOrder.discordId },
-                { $set: { role: "client" }, $inc: { orderCount: 1, totalSpent: updatedOrder.price || 0 } }
-              );
-            }
+            await markOrderBuyerAsClient(updatedOrder);
           } catch (statErr) {
             console.error("Metric update error after payment match:", statErr);
           }

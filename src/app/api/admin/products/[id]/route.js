@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
+import { normalizeImageUrl } from "@/lib/image-url";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,14 @@ export async function PUT(request, { params }) {
     }
 
     if (body?.imageUrl !== undefined) {
-      const url = String(body.imageUrl).trim();
+      const rawUrl = String(body.imageUrl).trim();
+      const url = normalizeImageUrl(rawUrl);
+      if (rawUrl && !url) {
+        return NextResponse.json(
+          { error: "Image URL must be a valid public https link (or upload a file)." },
+          { status: 400 }
+        );
+      }
       updates.imageUrl = url;
       if (url && (!body.images || body.images.length === 0)) {
         updates.images = [url];
@@ -89,12 +97,24 @@ export async function PUT(request, { params }) {
     }
 
     if (body?.images !== undefined) {
-      const parsedImages = Array.isArray(body.images)
-        ? body.images.map((i) => String(i).trim()).filter(Boolean)
-        : String(body.images || "")
-            .split("\n")
-            .map((i) => i.trim())
-            .filter(Boolean);
+      const rawImages = Array.isArray(body.images)
+        ? body.images
+        : String(body.images || "").split("\n");
+
+      const parsedImages = rawImages
+        .map((i) => normalizeImageUrl(i))
+        .filter(Boolean);
+
+      if (
+        rawImages.some((i) => String(i || "").trim()) &&
+        parsedImages.length === 0
+      ) {
+        return NextResponse.json(
+          { error: "Image URL must be a valid public https link (or upload a file)." },
+          { status: 400 }
+        );
+      }
+
       updates.images = parsedImages;
       if (parsedImages.length > 0 && !updates.imageUrl) {
         updates.imageUrl = parsedImages[0];

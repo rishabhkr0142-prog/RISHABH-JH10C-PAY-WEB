@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
+import ProductImage from "@/components/ProductImage";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
@@ -285,23 +285,14 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
         {/* Left Column: Image Gallery */}
         <div className="space-y-4">
           <div className="glass relative aspect-video w-full overflow-hidden">
-            {activeImage ? (
-              <Image
-                src={activeImage}
-                alt={product.name}
-                fill
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="object-cover"
-                unoptimized
-                priority
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-theme-surface">
-                <span className="font-mono text-4xl font-bold text-neutral-500">
-                  {(product.name || "P").slice(0, 2).toUpperCase()}
-                </span>
-              </div>
-            )}
+            <ProductImage
+              src={activeImage}
+              alt={product.name}
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="object-cover"
+              fallbackText={product.name}
+              priority
+            />
 
             <div className="absolute left-3 top-3">
               <span
@@ -333,13 +324,12 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                       : "border-theme-border opacity-60 hover:opacity-100"
                   }`}
                 >
-                  <Image
+                  <ProductImage
                     src={img}
                     alt=""
-                    fill
                     sizes="96px"
                     className="object-cover"
-                    unoptimized
+                    fallbackText={product.name}
                   />
                 </button>
               ))}

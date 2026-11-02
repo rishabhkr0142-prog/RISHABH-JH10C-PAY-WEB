@@ -1,7 +1,9 @@
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
+import User from "@/models/User";
 import { generateKey } from "@/lib/mani";
 import { sendLicenseDM } from "@/lib/discord";
+import { isRealDiscordId, linkedDiscordId } from "@/lib/account";
 
 /**
  * Server-side license fulfillment pipeline.
@@ -117,20 +119,50 @@ export async function completeOrder(orderId) {
   //    back a completed order — it is recorded so it can be resent later.
   let finalOrder = completed;
 
-  try {
-    const discordId = String(completed.discordId || completed.userId || "").trim();
-    if (!discordId) {
-      throw new Error("Buyer Discord ID is missing on this order.");
-    }
+  let discordId = isRealDiscordId(completed.discordId)
+    ? String(completed.discordId).trim()
+    : "";
 
+  if (!discordId && completed.user) {
+    const buyer = await User.findById(completed.user).lean();
+    discordId = linkedDiscordId(buyer);
+  }
+
+  // Legacy orders stored the Discord ID in userId.
+  if (!discordId && isRealDiscordId(completed.userId)) {
+    discordId = String(completed.userId).trim();
+  }
+
+  // Google-only accounts have no Discord identity yet. The order is still
+  // completed and the key is visible in the dashboard; DM is skipped.
+  if (!discordId) {
+    finalOrder = await Order.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          dmSent: false,
+          dmError: "",
+          dmSkipReason: "discord_not_linked",
+          dmSentAt: null,
+        },
+      },
+      { new: true }
+    ).lean();
+
+    return { ok: true, order: finalOrder || completed };
+  }
+
+  try {
     await sendLicenseDM({ discordId, order: completed });
 
     finalOrder = await Order.findByIdAndUpdate(
       id,
       {
         $set: {
+          discordId,
           dmSent: true,
           dmError: "",
+          dmSkipReason: "",
           dmSentAt: new Date(),
         },
       },
@@ -143,6 +175,7 @@ export async function completeOrder(orderId) {
         $set: {
           dmSent: false,
           dmError: safeError(err),
+          dmSkipReason: "",
         },
       },
       { new: true }

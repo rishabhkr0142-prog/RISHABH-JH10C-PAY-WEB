@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
+import { findUserForSession } from "@/lib/account";
 import { isLicenseOwner } from "@/lib/order-access";
 import { rateLimit } from "@/lib/rate-limit";
 import { retryOrderFulfillment } from "@/lib/fulfillment";
@@ -46,12 +47,14 @@ export async function POST(request, { params }) {
     await connectDB();
 
     const order = await Order.findById(orderId).lean();
+    const userDoc = await findUserForSession(session);
+    const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (!isLicenseOwner(order, session)) {
+    if (!isLicenseOwner(order, session, userDocLean)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

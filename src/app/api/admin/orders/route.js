@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import Product from "@/models/Product";
+import User from "@/models/User";
+import { isRealDiscordId } from "@/lib/account";
 import { incrementStat } from "@/lib/stats";
 import { normalizeProductKey } from "@/lib/product-keys";
 import { completeOrder } from "@/lib/fulfillment";
@@ -56,11 +58,25 @@ export async function POST(request) {
       : "pending";
 
     const { customerName, email, discordId, plan } = body || {};
+    const cleanDiscordId = String(discordId || "").trim();
+
+    // Link manually-recorded Discord orders to the matching site account so
+    // they still appear in the buyer's dashboard.
+    const buyer = isRealDiscordId(cleanDiscordId)
+      ? await User.findOne({
+          $or: [
+            { discordId: cleanDiscordId },
+            { "authProviders.discord.id": cleanDiscordId },
+          ],
+        }).lean()
+      : null;
 
     const order = await Order.create({
       customerName: String(customerName || "Guest").trim(),
       email: String(email || "").trim(),
-      discordId: String(discordId || "").trim(),
+      userId: buyer ? String(buyer._id) : cleanDiscordId,
+      ...(buyer ? { user: buyer._id } : {}),
+      discordId: cleanDiscordId,
       product: productId,
       productId,
       productName: product.name,

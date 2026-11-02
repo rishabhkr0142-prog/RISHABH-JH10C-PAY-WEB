@@ -2,16 +2,13 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Allow remote avatars / product images.
-  // Product images can be hosted anywhere (ImgBB, Imgur, CDN, Unsplash, ...),
-  // so we whitelist the well-known ones Discord users need.
+  // Product images are uploaded to Cloudinary from the admin panel, so only
+  // Cloudinary's deliver host needs to be whitelisted for next/image.
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "cdn.discordapp.com" },
-      { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "i.imgur.com" },
-      { protocol: "https", hostname: "i.ibb.co" },
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
     ],
+    formats: ["image/avif", "image/webp"],
   },
 
   // HTTP Security Headers

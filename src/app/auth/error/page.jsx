@@ -4,12 +4,12 @@ const ERROR_DETAILS = {
   Configuration: {
     title: "Configuration Error",
     message:
-      "Server configuration issue. Please verify NEXTAUTH_SECRET, DISCORD_CLIENT_ID, and DISCORD_CLIENT_SECRET.",
+      "Server configuration issue. Please verify NEXTAUTH_SECRET, DISCORD_CLIENT_ID/SECRET, and GOOGLE_CLIENT_ID/SECRET.",
   },
   AccessDenied: {
     title: "Access Denied",
     message:
-      "You do not have permission to sign in, or you cancelled the Discord authorization request.",
+      "You do not have permission to sign in, or you cancelled the Google/Discord authorization request.",
   },
   Verification: {
     title: "Verification Failed",
@@ -19,16 +19,21 @@ const ERROR_DETAILS = {
   OAuthSignin: {
     title: "OAuth Initialization Error",
     message:
-      "Failed to construct the Discord authorization URL. Please check your Discord OAuth credentials.",
+      "Failed to construct the provider authorization URL. Check your Google and Discord OAuth credentials.",
   },
   OAuthCallback: {
     title: "OAuth Callback Error",
     message:
-      "Error processing Discord callback. Verify that http://localhost:3000/api/auth/callback/discord is listed in your Discord Developer Portal redirect URIs.",
+      "Error processing the OAuth callback. Verify both /api/auth/callback/google and /api/auth/callback/discord are registered for this exact domain.",
+  },
+  OAuthAccountNotLinked: {
+    title: "Email Already Registered",
+    message:
+      "This email is already linked to another sign-in method. Sign in with the original method, then link this provider from Profile.",
   },
   OAuthCreateAccount: {
     title: "Account Creation Failed",
-    message: "Could not create a user record in MongoDB for your Discord account.",
+    message: "Could not create a user record in MongoDB for your account.",
   },
   Callback: {
     title: "Authentication Callback Error",

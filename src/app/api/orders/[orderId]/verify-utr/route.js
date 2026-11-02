@@ -4,7 +4,10 @@ import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
 import Payment from "@/models/Payment";
-import User from "@/models/User";
+import {
+  findUserForSession,
+  markOrderBuyerAsClient,
+} from "@/lib/account";
 import { rateLimit } from "@/lib/rate-limit";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
@@ -45,7 +48,8 @@ export async function POST(request, { params }) {
 
   try {
     await connectDB();
-    const userDoc = await User.findOne({ discordId: session.user.id }).lean();
+    const userDoc = await findUserForSession(session);
+    const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
 
     const order = await Order.findById(orderId);
     if (!order) {
@@ -53,7 +57,7 @@ export async function POST(request, { params }) {
     }
 
     // 2. Ownership verification (Order owner or Admin)
-    const isOwner = isOrderOwner(order, session, userDoc);
+    const isOwner = isOrderOwner(order, session, userDocLean);
 
     const isAdmin = Boolean(session.user.isAdmin);
 
@@ -83,7 +87,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({
         ok: true,
         message: "Payment already verified successfully.",
-        order: redactOrderLicense(toPlainText(currentOrder), session),
+        order: redactOrderLicense(toPlainText(currentOrder), session, userDocLean),
       });
     }
 
@@ -125,7 +129,7 @@ export async function POST(request, { params }) {
           return NextResponse.json({
             ok: true,
             message: "Payment verified successfully",
-            order: redactOrderLicense(toPlainText(order), session),
+            order: redactOrderLicense(toPlainText(order), session, userDocLean),
           });
         }
         return NextResponse.json(
@@ -246,12 +250,7 @@ export async function POST(request, { params }) {
 
     // Update user client role & stats
     try {
-      if (order.discordId) {
-        await User.findOneAndUpdate(
-          { discordId: order.discordId },
-          { $set: { role: "client" }, $inc: { orderCount: 1, totalSpent: updatedOrder.price || 0 } }
-        );
-      }
+      await markOrderBuyerAsClient(updatedOrder);
     } catch (metricErr) {
       console.error("Metric update error:", metricErr);
     }
@@ -276,7 +275,7 @@ export async function POST(request, { params }) {
     return NextResponse.json({
       ok: true,
       message: "Payment verified successfully",
-      order: redactOrderLicense(toPlainText(deliveredOrder), session),
+      order: redactOrderLicense(toPlainText(deliveredOrder), session, userDocLean),
     });
   } catch (err) {
     console.error("POST /api/orders/[orderId]/verify-utr failed:", err);

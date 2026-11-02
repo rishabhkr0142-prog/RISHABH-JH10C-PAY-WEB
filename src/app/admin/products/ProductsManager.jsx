@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import ProductForm from "./ProductForm";
+import ProductImage from "@/components/ProductImage";
 import { formatPrice } from "@/lib/format";
 import { PRODUCT_LABELS, normalizeProductKey } from "@/lib/product-keys";
 
@@ -178,20 +178,13 @@ export default function ProductsManager({ products = [] }) {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-theme-border bg-black">
-                            {imageSrc ? (
-                              <Image
-                                src={imageSrc}
-                                alt={p.name}
-                                fill
-                                sizes="40px"
-                                className="object-cover"
-                                unoptimized
-                              />
-                            ) : (
-                              <span className="flex h-full w-full items-center justify-center font-mono text-xs font-bold text-neutral-500">
-                                {p.name.slice(0, 2).toUpperCase()}
-                              </span>
-                            )}
+                            <ProductImage
+                              src={imageSrc}
+                              alt={p.name}
+                              sizes="40px"
+                              className="object-cover"
+                              fallbackText={p.name}
+                            />
                           </div>
                           <div>
                             <p className="font-semibold text-white">{p.name}</p>

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
+import {
+  findUserForSession,
+  isRealDiscordId,
+  linkedDiscordId,
+} from "@/lib/account";
 import { isLicenseOwner } from "@/lib/order-access";
 import { sendLicenseDM } from "@/lib/discord";
 
@@ -30,12 +35,14 @@ export async function POST(request, { params }) {
     await connectDB();
 
     const order = await Order.findById(orderId);
+    const userDoc = await findUserForSession(session);
+    const userDocLean = userDoc?.toObject ? userDoc.toObject() : userDoc;
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (!isLicenseOwner(order, session)) {
+    if (!isLicenseOwner(order, session, userDocLean)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -62,10 +69,17 @@ export async function POST(request, { params }) {
       );
     }
 
-    const discordId = String(order.discordId || order.userId || "").trim();
+    const discordId =
+      (isRealDiscordId(order.discordId) ? String(order.discordId).trim() : "") ||
+      linkedDiscordId(userDocLean) ||
+      (isRealDiscordId(order.userId) ? String(order.userId).trim() : "");
+
     if (!discordId) {
       return NextResponse.json(
-        { error: "No Discord ID is linked to this order." },
+        {
+          error: "Discord is not linked to this account yet.",
+          code: "discord_not_linked",
+        },
         { status: 400 }
       );
     }
@@ -77,8 +91,10 @@ export async function POST(request, { params }) {
         { _id: order._id },
         {
           $set: {
+            discordId,
             dmSent: true,
             dmError: "",
+            dmSkipReason: "",
             dmSentAt: new Date(),
             dmLastResentAt: new Date(),
           },
@@ -95,6 +111,7 @@ export async function POST(request, { params }) {
           $set: {
             dmSent: false,
             dmError: message,
+            dmSkipReason: "",
             dmLastResentAt: new Date(),
           },
         }

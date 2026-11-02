@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
+import { normalizeImageUrl } from "@/lib/image-url";
 
 export const dynamic = "force-dynamic";
 
@@ -76,14 +77,27 @@ export async function POST(request) {
           .map((f) => f.trim())
           .filter(Boolean);
 
-    // Parse images array
-    const parsedImages = Array.isArray(images) && images.length > 0
-      ? images.map((img) => String(img).trim()).filter(Boolean)
-      : imageUrl
-      ? [String(imageUrl).trim()]
-      : [];
+    // Parse and validate image URLs (always stored as permanent https links)
+    const rawImages =
+      Array.isArray(images) && images.length > 0
+        ? images
+        : imageUrl
+        ? [imageUrl]
+        : [];
 
-    const mainImageUrl = parsedImages[0] || String(imageUrl).trim();
+    const parsedImages = rawImages.map(normalizeImageUrl).filter(Boolean);
+
+    if (
+      rawImages.some((img) => String(img || "").trim()) &&
+      parsedImages.length === 0
+    ) {
+      return NextResponse.json(
+        { error: "Image URL must be a valid public https link (or upload a file)." },
+        { status: 400 }
+      );
+    }
+
+    const mainImageUrl = parsedImages[0] || "";
 
     // Parse duration plans
     const parsedPlans = Array.isArray(plans)

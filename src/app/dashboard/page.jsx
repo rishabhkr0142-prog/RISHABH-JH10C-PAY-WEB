@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
-import User from "@/models/User";
 import Order from "@/models/Order";
+import { findUserForSession } from "@/lib/account";
 import Product from "@/models/Product"; // ensure Product model registered for populate
 import { toPlainText } from "@/lib/serialize";
 import { ownerFilterFor, redactOrderLicense } from "@/lib/order-access";
@@ -29,9 +29,10 @@ export default async function DashboardPage({ searchParams }) {
   try {
     await connectDB();
 
-    // 1. Fetch user profile from DB
+    // 1. Fetch the canonical user profile from DB
     if (session.user.id) {
-      dbUser = await User.findOne({ discordId: session.user.id }).lean();
+      const userDoc = await findUserForSession(session);
+      dbUser = userDoc?.toObject ? userDoc.toObject() : userDoc;
     }
 
     // 2. Fetch orders strictly belonging to this logged-in Discord account
@@ -41,7 +42,7 @@ export default async function DashboardPage({ searchParams }) {
       .lean();
 
     orders = toPlainText(orderDocs).map((order) =>
-      redactOrderLicense(order, session)
+      redactOrderLicense(order, session, dbUser)
     );
     if (dbUser) {
       dbUser = toPlainText(dbUser);
@@ -66,6 +67,9 @@ export default async function DashboardPage({ searchParams }) {
   };
 
   const initialTab = searchParams?.tab || "overview";
+  const linked = typeof searchParams?.linked === "string" ? searchParams.linked : "";
+  const linkError =
+    typeof searchParams?.linkError === "string" ? searchParams.linkError : "";
 
   return (
     <DashboardClient
@@ -74,6 +78,8 @@ export default async function DashboardPage({ searchParams }) {
       orders={orders}
       stats={stats}
       initialTab={initialTab}
+      linked={linked}
+      linkError={linkError}
     />
   );
 }

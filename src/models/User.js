@@ -14,6 +14,15 @@ const UserSchema = new mongoose.Schema(
     username: { type: String, required: true, trim: true },
     // Full URL to the profile avatar (https://cdn.discordapp.com/avatars/...)
     avatar: { type: String, default: "" },
+    // Latest Google profile photo (https://lh3.googleusercontent.com/...).
+    // Stored separately from `avatar` so Discord avatars are never overwritten.
+    googlePicture: { type: String, default: "" },
+    // Public homepage opt-in. When false the photo is never returned by the
+    // public Google users endpoint; the account is still counted in the total.
+    showOnHomepage: { type: Boolean, default: true },
+    // Updated on every successful Google login/link. Used to pick the freshest
+    // avatars for the homepage row without exposing any personal data.
+    lastGoogleLoginAt: { type: Date, default: null },
     email: { type: String, default: "", trim: true, lowercase: true },
     // Verified identities linked to this account. Google is identified by the
     // stable "sub" claim, never by email.

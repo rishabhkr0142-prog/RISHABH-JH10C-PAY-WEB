@@ -7,6 +7,9 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
+      // Google OAuth profile photos (lh3, lh4, ... googleusercontent.com).
+      { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },
+      { protocol: "https", hostname: "**.googleusercontent.com", pathname: "/**" },
     ],
     formats: ["image/avif", "image/webp"],
   },

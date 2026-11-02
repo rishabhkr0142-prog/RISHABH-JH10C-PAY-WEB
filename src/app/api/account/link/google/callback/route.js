@@ -15,6 +15,7 @@ import {
   hasValidLinkState,
   linkCallbackUri,
 } from "@/lib/oauth-link";
+import { sanitizeGoogleAvatarUrl } from "@/lib/google-avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,7 @@ export async function GET(request) {
     const emailVerified =
       profile?.email_verified === true || profile?.email_verified === "true";
     const email = emailVerified ? normalizeEmail(profile?.email) : "";
+    const googlePicture = sanitizeGoogleAvatarUrl(profile?.picture);
 
     await connectDB();
 
@@ -127,9 +129,9 @@ export async function GET(request) {
         "authProviders.google.sub": googleSub,
         "authProviders.google.email": email,
         ...(email && !current.email ? { email } : {}),
-        ...(profile?.picture && !current.avatar
-          ? { avatar: String(profile.picture) }
-          : {}),
+        ...(googlePicture ? { googlePicture } : {}),
+        lastGoogleLoginAt: new Date(),
+        ...(googlePicture && !current.avatar ? { avatar: googlePicture } : {}),
       },
     });
 

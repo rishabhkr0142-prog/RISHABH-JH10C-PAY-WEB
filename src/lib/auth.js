@@ -11,6 +11,7 @@ import {
   normalizeEmail,
   syntheticDiscordId,
 } from "@/lib/account";
+import { sanitizeGoogleAvatarUrl } from "@/lib/google-avatar";
 
 /**
  * NextAuth.js configuration — Discord + Google OAuth.
@@ -254,6 +255,9 @@ async function signInWithGoogle({ user, account, profile }) {
   const email = emailVerified
     ? normalizeEmail(profile?.email || user?.email)
     : "";
+  const googlePicture = sanitizeGoogleAvatarUrl(
+    profile?.picture || user?.image
+  );
 
   let existing = await User.findOne({
     "authProviders.google.sub": googleSub,
@@ -277,6 +281,9 @@ async function signInWithGoogle({ user, account, profile }) {
       discordId: syntheticDiscordId(googleSub),
       username: user?.name || email || `Google ${googleSub.slice(-6)}`,
       avatar: user?.image || "",
+      googlePicture,
+      showOnHomepage: true,
+      lastGoogleLoginAt: new Date(),
       email,
       role: "user",
       authProviders: {
@@ -292,6 +299,8 @@ async function signInWithGoogle({ user, account, profile }) {
           "authProviders.google.sub": googleSub,
           "authProviders.google.email": email,
           ...(email && !existing.email ? { email } : {}),
+          ...(googlePicture ? { googlePicture } : {}),
+          lastGoogleLoginAt: new Date(),
           ...(user?.image && !existing.avatar ? { avatar: user.image } : {}),
         },
       },

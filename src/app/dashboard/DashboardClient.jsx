@@ -50,6 +50,11 @@ export default function DashboardClient({
   const [resendBusyId, setResendBusyId] = useState(null);
   const [licenseNotice, setLicenseNotice] = useState(null);
   const [accountNotice, setAccountNotice] = useState(null);
+  const [showOnHomepage, setShowOnHomepage] = useState(
+    dbUser?.showOnHomepage !== false
+  );
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [visibilityError, setVisibilityError] = useState("");
 
   // Selected Order for Details Modal
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -62,6 +67,12 @@ export default function DashboardClient({
       setActiveTab(tabParam);
     }
   }, [tabParam]);
+
+  useEffect(() => {
+    if (dbUser?.showOnHomepage !== undefined) {
+      setShowOnHomepage(dbUser.showOnHomepage !== false);
+    }
+  }, [dbUser?.showOnHomepage]);
 
   useEffect(() => {
     if (!linked && !linkError) return;
@@ -124,6 +135,34 @@ export default function DashboardClient({
   const showLicenseNotice = (type, text) => {
     setLicenseNotice({ type, text });
     setTimeout(() => setLicenseNotice(null), 5000);
+  };
+
+  const handleHomepageVisibilityToggle = async () => {
+    if (visibilityBusy) return;
+
+    const nextValue = !showOnHomepage;
+    setShowOnHomepage(nextValue);
+    setVisibilityBusy(true);
+    setVisibilityError("");
+
+    try {
+      const res = await fetch("/api/account/homepage-visibility", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showOnHomepage: nextValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Could not update homepage photo setting");
+      }
+      setShowOnHomepage(data.showOnHomepage !== false);
+      router.refresh();
+    } catch (err) {
+      setShowOnHomepage(!nextValue);
+      setVisibilityError(err.message || "Could not update homepage photo setting");
+    } finally {
+      setVisibilityBusy(false);
+    }
   };
 
   const planExpiryLabel = (order) => {
@@ -1178,6 +1217,39 @@ export default function DashboardClient({
                   Link Google
                 </a>
               )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+              <div className="pr-3">
+                <p className="text-neutral-400">Homepage par meri photo dikhao</p>
+                <p className="mt-0.5 text-[10px] leading-relaxed text-neutral-500">
+                  Show my Google profile photo in the homepage “Joined with Google” row.
+                </p>
+                {visibilityError && (
+                  <p className="mt-1 text-[10px] text-red-300">{visibilityError}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showOnHomepage}
+                aria-label="Homepage par meri photo dikhao"
+                onClick={handleHomepageVisibilityToggle}
+                disabled={visibilityBusy}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
+                  showOnHomepage
+                    ? "border-white bg-white"
+                    : "border-theme-border bg-white/10"
+                } ${visibilityBusy ? "cursor-wait opacity-60" : ""}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                    showOnHomepage
+                      ? "translate-x-6 bg-black"
+                      : "translate-x-1 bg-white/70"
+                  }`}
+                />
+              </button>
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-3">

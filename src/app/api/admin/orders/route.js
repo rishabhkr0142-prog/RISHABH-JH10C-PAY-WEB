@@ -8,6 +8,10 @@ import User from "@/models/User";
 import { isRealDiscordId } from "@/lib/account";
 import { incrementStat } from "@/lib/stats";
 import { normalizeProductKey } from "@/lib/product-keys";
+import {
+  normalizeDeliveryType,
+  resolveDeliveryContent,
+} from "@/lib/delivery-content";
 import { completeOrder } from "@/lib/fulfillment";
 
 /**
@@ -35,12 +39,29 @@ export async function POST(request) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
     }
 
+    const deliveryType = normalizeDeliveryType(product.deliveryType);
     const productKey = normalizeProductKey(product.productKey);
-    if (!productKey) {
+
+    if (deliveryType === "license" && !productKey) {
       return NextResponse.json(
         { error: "Set this product's license app (uid/lib) in Products first." },
         { status: 400 }
       );
+    }
+
+    if (deliveryType === "content") {
+      const resolved = resolveDeliveryContent(product, null, {
+        productName: product.name,
+      });
+      if (!resolved.ok) {
+        return NextResponse.json(
+          {
+            error:
+              "Add delivery content (link or message) to this product first.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const quantity = Math.max(1, Number(body?.quantity || 1) || 1);
@@ -81,6 +102,7 @@ export async function POST(request) {
       productId,
       productName: product.name,
       productKey,
+      deliveryType,
       quantity,
       price: amount,
       amount,

@@ -1,6 +1,8 @@
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { toPlainText } from "@/lib/serialize";
+import { stripProductDeliveryFields } from "@/lib/delivery-content";
+import { attachStockAvailability } from "@/lib/product-stock";
 import ProductsPageClient from "./ProductsPageClient";
 
 // Catalog is public — cache for 30s and revalidate on product changes.
@@ -22,7 +24,8 @@ export default async function ProductsPage() {
       .sort({ createdAt: -1 })
       .lean();
 
-    products = toPlainText(docs);
+    const withStock = await attachStockAvailability(toPlainText(docs));
+    products = withStock.map(stripProductDeliveryFields);
   } catch (err) {
     console.error("Products page fetch error:", err?.message || err);
   }

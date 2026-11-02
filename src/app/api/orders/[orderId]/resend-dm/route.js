@@ -8,7 +8,8 @@ import {
   linkedDiscordId,
 } from "@/lib/account";
 import { isLicenseOwner } from "@/lib/order-access";
-import { sendLicenseDM } from "@/lib/discord";
+import { isContentDelivery } from "@/lib/delivery-content";
+import { sendOrderDM } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +47,15 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (order.status !== "completed" || !order.licenseKey) {
+    const hasDelivery = isContentDelivery(order.deliveryType)
+      ? Boolean(order.deliveryContent)
+      : Boolean(order.licenseKey);
+
+    if (order.status !== "completed" || !hasDelivery) {
       return NextResponse.json(
-        { error: "This order does not have a license key to resend yet." },
+        {
+          error: "This order does not have delivery details to resend yet.",
+        },
         { status: 400 }
       );
     }
@@ -85,7 +92,7 @@ export async function POST(request, { params }) {
     }
 
     try {
-      await sendLicenseDM({ discordId, order: order.toObject() });
+      await sendOrderDM({ discordId, order: order.toObject() });
 
       await Order.updateOne(
         { _id: order._id },

@@ -186,8 +186,8 @@ export default function DashboardClient({
         method: "POST",
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not generate license key");
-      showLicenseNotice("success", "License key generated successfully.");
+      if (!res.ok) throw new Error(data.error || "Could not complete delivery");
+      showLicenseNotice("success", "Delivery details are ready.");
       router.refresh();
     } catch (err) {
       showLicenseNotice("error", err.message);
@@ -204,7 +204,7 @@ export default function DashboardClient({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not resend the DM");
-      showLicenseNotice("success", "License key sent to your Discord DM.");
+      showLicenseNotice("success", "Delivery details sent to your Discord DM.");
       router.refresh();
     } catch (err) {
       showLicenseNotice("error", err.message);
@@ -748,14 +748,14 @@ export default function DashboardClient({
             </div>
           </div>
 
-          {/* License Delivery Cards */}
+          {/* Delivery Cards */}
           {licenseOrders.length > 0 && (
             <div className="space-y-3">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-base font-bold text-white">License Keys</h2>
+                  <h2 className="text-base font-bold text-white">Your Deliveries</h2>
                   <p className="text-xs text-neutral-400">
-                    Keys delivered for your verified payments. One key works on one device.
+                    Delivery details for your verified payments. Keep them private.
                   </p>
                 </div>
               </div>
@@ -774,9 +774,12 @@ export default function DashboardClient({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {licenseOrders.map((order) => {
+                  const isContent = order.deliveryType === "content";
+                  const delivery = order.deliveryContent || null;
                   const hasKey = Boolean(order.licenseKey);
+                  const hasDelivery = isContent ? Boolean(delivery) : hasKey;
                   const isProcessing =
-                    !hasKey &&
+                    !hasDelivery &&
                     ["paid", "processing", "completed"].includes(order.status);
                   const isBusy = licenseBusyId === order._id;
                   const needsDiscordLink =
@@ -799,7 +802,154 @@ export default function DashboardClient({
                         <div className="shrink-0">{renderStatusBadge(order.status)}</div>
                       </div>
 
-                      {hasKey ? (
+                      {isContent && delivery ? (
+                        <div className="mt-4 space-y-3">
+                          {delivery.title && (
+                            <div>
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                                {delivery.title}
+                              </span>
+                            </div>
+                          )}
+
+                          {delivery.message && (
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                                  Delivery Message
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      delivery.message,
+                                      `content-message-${order._id}`
+                                    )
+                                  }
+                                  className="rounded border border-theme-border px-2 py-1 text-[10px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                                >
+                                  {copiedId === `content-message-${order._id}`
+                                    ? "Copied"
+                                    : "Copy"}
+                                </button>
+                              </div>
+                              <p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg border border-theme-border bg-black/60 px-3 py-2 text-[11px] leading-relaxed text-neutral-200">
+                                {delivery.message}
+                              </p>
+                            </div>
+                          )}
+
+                          {delivery.link && (
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                                  Delivery Link
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      delivery.link,
+                                      `content-link-${order._id}`
+                                    )
+                                  }
+                                  className="rounded border border-theme-border px-2 py-1 text-[10px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                                >
+                                  {copiedId === `content-link-${order._id}`
+                                    ? "Copied"
+                                    : "Copy Link"}
+                                </button>
+                              </div>
+                              <a
+                                href={delivery.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-primary mt-1.5 inline-flex !px-3 !py-1.5 !text-[11px] font-bold"
+                              >
+                                {delivery.buttonLabel || "Open Link"}
+                              </a>
+                            </div>
+                          )}
+
+                          {delivery.stockItem && (
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                                  Your Item
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      delivery.stockItem,
+                                      `content-stock-${order._id}`
+                                    )
+                                  }
+                                  className="rounded border border-theme-border px-2 py-1 text-[10px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                                >
+                                  {copiedId === `content-stock-${order._id}`
+                                    ? "Copied"
+                                    : "Copy"}
+                                </button>
+                              </div>
+                              <code className="mt-1.5 block whitespace-pre-wrap break-all rounded-lg border border-theme-border bg-black/60 px-3 py-2 font-mono text-[11px] text-emerald-300">
+                                {delivery.stockItem}
+                              </code>
+                            </div>
+                          )}
+
+                          <p className="text-[10px] text-amber-300/80">
+                            Keep these delivery details private. Do not share them
+                            publicly.
+                          </p>
+                          {order.deliveryError && (
+                            <p className="text-[10px] text-red-300/90 break-words">
+                              {order.deliveryError}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <a
+                              href={discordInvite}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-ghost !px-3 !py-1.5 !text-[11px]"
+                            >
+                              Support
+                            </a>
+                            <WhatsAppSupport
+                              message={whatsappMessageFor(order)}
+                              label="WhatsApp"
+                              className="!px-3 !py-1.5 !text-[11px]"
+                            />
+                            {needsDiscordLink ? (
+                              <a
+                                href="/api/account/link/discord/start"
+                                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/20"
+                              >
+                                Discord link karo, DM paane ke liye
+                              </a>
+                            ) : (
+                              <button
+                                onClick={() => handleResendDM(order)}
+                                disabled={resendBusyId === order._id}
+                                className="rounded-lg border border-theme-border px-3 py-1.5 text-[11px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                                title="Resend the delivery details to your Discord DM (once per 5 minutes)"
+                              >
+                                {resendBusyId === order._id ? "Sending..." : "Resend DM"}
+                              </button>
+                            )}
+                          </div>
+                          {needsDiscordLink && (
+                            <p className="text-[10px] text-sky-300/80">
+                              Delivery details dashboard me safe hain. DM delivery ke
+                              liye Discord link karo.
+                            </p>
+                          )}
+                          {order.dmSent === false && order.dmError && (
+                            <p className="text-[10px] text-amber-400/80">
+                              DM delivery failed. You can retry with Resend DM.
+                            </p>
+                          )}
+                        </div>
+                      ) : hasKey ? (
                         <div className="mt-4 space-y-3">
                           <div>
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
@@ -885,11 +1035,16 @@ export default function DashboardClient({
                         <div className="mt-4 space-y-3">
                           <div className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[11px] font-semibold text-sky-300">
                             <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-                            Processing your license key...
+                            Processing your delivery...
                           </div>
                           {order.licenseError && (
                             <p className="text-[10px] text-red-300/90 break-words">
                               {order.licenseError}
+                            </p>
+                          )}
+                          {order.deliveryError && (
+                            <p className="text-[10px] text-red-300/90 break-words">
+                              {order.deliveryError}
                             </p>
                           )}
                           <button
@@ -897,12 +1052,12 @@ export default function DashboardClient({
                             disabled={isBusy}
                             className="btn-primary !px-3 !py-1.5 !text-[11px] font-bold"
                           >
-                            {isBusy ? "Retrying..." : "Retry Key Generation"}
+                            {isBusy ? "Retrying..." : "Retry Delivery"}
                           </button>
                         </div>
                       ) : (
                         <p className="mt-4 text-[11px] text-neutral-500">
-                          No license key available for this order.
+                          No delivery details available for this order yet.
                         </p>
                       )}
                     </div>
@@ -1350,7 +1505,81 @@ export default function DashboardClient({
                   <span className="text-neutral-400">Fulfillment Status:</span>
                   <div>{renderStatusBadge(selectedOrder.status)}</div>
                 </div>
-                {selectedOrder.licenseKey ? (
+                {selectedOrder.deliveryType === "content" &&
+                selectedOrder.deliveryContent ? (
+                  <div className="space-y-3 border-t border-white/5 pt-3">
+                    {selectedOrder.deliveryContent.title && (
+                      <span className="block font-semibold text-neutral-300">
+                        {selectedOrder.deliveryContent.title}
+                      </span>
+                    )}
+                    {selectedOrder.deliveryContent.message && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-neutral-400">Message:</span>
+                          <button
+                            onClick={() =>
+                              copyToClipboard(
+                                selectedOrder.deliveryContent.message,
+                                `modal-content-message-${selectedOrder._id}`
+                              )
+                            }
+                            className="rounded border border-theme-border px-2 py-1 text-[10px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                          >
+                            {copiedId ===
+                            `modal-content-message-${selectedOrder._id}`
+                              ? "Copied"
+                              : "Copy"}
+                          </button>
+                        </div>
+                        <p className="whitespace-pre-wrap break-words rounded-lg border border-theme-border bg-black/60 px-3 py-2 text-[11px] leading-relaxed text-neutral-200">
+                          {selectedOrder.deliveryContent.message}
+                        </p>
+                      </div>
+                    )}
+                    {selectedOrder.deliveryContent.link && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-neutral-400">Link:</span>
+                          <button
+                            onClick={() =>
+                              copyToClipboard(
+                                selectedOrder.deliveryContent.link,
+                                `modal-content-link-${selectedOrder._id}`
+                              )
+                            }
+                            className="rounded border border-theme-border px-2 py-1 text-[10px] font-semibold text-neutral-300 hover:bg-white/10 hover:text-white"
+                          >
+                            {copiedId ===
+                            `modal-content-link-${selectedOrder._id}`
+                              ? "Copied"
+                              : "Copy"}
+                          </button>
+                        </div>
+                        <a
+                          href={selectedOrder.deliveryContent.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-primary inline-flex !px-3 !py-1.5 !text-[11px] font-bold"
+                        >
+                          {selectedOrder.deliveryContent.buttonLabel || "Open Link"}
+                        </a>
+                      </div>
+                    )}
+                    {selectedOrder.deliveryContent.stockItem && (
+                      <div>
+                        <span className="mb-1 block text-neutral-400">Your Item:</span>
+                        <code className="block whitespace-pre-wrap break-all rounded-lg border border-theme-border bg-black/60 px-3 py-2 font-mono text-[11px] text-emerald-300">
+                          {selectedOrder.deliveryContent.stockItem}
+                        </code>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-amber-300/90">
+                      Keep these delivery details private. Do not share them
+                      publicly.
+                    </p>
+                  </div>
+                ) : selectedOrder.licenseKey ? (
                   <div className="border-t border-white/5 pt-3">
                     <span className="mb-1.5 block text-neutral-400">License Key:</span>
                     <div className="flex items-start gap-2">
@@ -1379,11 +1608,16 @@ export default function DashboardClient({
                   <div className="border-t border-white/5 pt-3">
                     <div className="flex items-center gap-2 text-[11px] font-semibold text-sky-300">
                       <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-                      Processing your license key...
+                      Processing your delivery...
                     </div>
                     {selectedOrder.licenseError && (
                       <p className="mt-1 text-[10px] text-red-300/90">
                         {selectedOrder.licenseError}
+                      </p>
+                    )}
+                    {selectedOrder.deliveryError && (
+                      <p className="mt-1 text-[10px] text-red-300/90">
+                        {selectedOrder.deliveryError}
                       </p>
                     )}
                     <button
@@ -1391,7 +1625,7 @@ export default function DashboardClient({
                       disabled={licenseBusyId === selectedOrder._id}
                       className="btn-primary mt-2 !px-3 !py-1.5 !text-[11px] font-bold"
                     >
-                      {licenseBusyId === selectedOrder._id ? "Retrying..." : "Retry Key Generation"}
+                      {licenseBusyId === selectedOrder._id ? "Retrying..." : "Retry Delivery"}
                     </button>
                   </div>
                 ) : null}

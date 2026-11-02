@@ -9,6 +9,7 @@
  */
 
 import { productLabel } from "@/lib/product-keys";
+import { isContentDelivery } from "@/lib/delivery-content";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -109,20 +110,37 @@ function expiryLabel(order) {
   });
 }
 
+function truncate(value, max) {
+  const text = String(value ?? "");
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function linkMarkdown(label, url) {
+  const safeLabel = String(label || "Open Link").replace(/[[\]]/g, "").trim();
+  return `[${safeLabel || "Open Link"}](${url})`;
+}
+
 /**
- * Send the license key + loader link to the buyer via Discord DM.
+ * Send a completed order to the buyer via Discord DM.
+ * License orders receive their key; content orders receive their snapshot.
  *
  * @param {{ discordId: string, order: object }} params
  * @returns {Promise<{ channelId: string, messageId: string }>}
  */
-export async function sendLicenseDM({ discordId, order }) {
+export async function sendOrderDM({ discordId, order }) {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) {
     throw new Error("DISCORD_BOT_TOKEN is not configured on the server.");
   }
 
+  const isContent = isContentDelivery(order?.deliveryType);
   const licenseKey = String(order?.licenseKey || "").trim();
-  if (!licenseKey) {
+  const delivery = order?.deliveryContent || null;
+
+  if (isContent && !delivery) {
+    throw new Error("Order does not have delivery content yet.");
+  }
+  if (!isContent && !licenseKey) {
     throw new Error("Order does not have a license key yet.");
   }
 
@@ -150,37 +168,82 @@ export async function sendLicenseDM({ discordId, order }) {
       value: plan,
       inline: true,
     },
-    {
-      name: "License Key",
-      value: `\`\`\`\n${licenseKey}\n\`\`\``,
-      inline: false,
-    },
-    {
-      name: "Validity",
-      value: expiryLabel(order),
-      inline: true,
-    },
-    {
-      name: "Devices",
-      value: "1 device only",
-      inline: true,
-    },
   ];
 
-  if (loaderUrl) {
+  if (isContent) {
+    const title = String(delivery?.title || "Delivery Details").trim();
+    const message = String(delivery?.message || "").trim();
+    const link = String(delivery?.link || "").trim();
+    const stockItem = String(delivery?.stockItem || "").trim();
+
+    if (message) {
+      fields.push({
+        name: truncate(title || "Delivery Details", 256),
+        value: truncate(message, 1024),
+        inline: false,
+      });
+    } else if (title) {
+      fields.push({
+        name: "Delivery",
+        value: truncate(title, 1024),
+        inline: false,
+      });
+    }
+
+    if (link) {
+      fields.push({
+        name: "Link",
+        value: linkMarkdown(delivery?.buttonLabel, link),
+        inline: false,
+      });
+    }
+
+    if (stockItem) {
+      fields.push({
+        name: "Your Item",
+        value: `\`\`\`\n${truncate(stockItem, 1000)}\n\`\`\``,
+        inline: false,
+      });
+    }
+
     fields.push({
-      name: "Loader",
-      value: `[Download Loader](${loaderUrl})`,
+      name: "Important",
+      value: "Keep these delivery details private. Do not share them publicly.",
+      inline: false,
+    });
+  } else {
+    fields.push(
+      {
+        name: "License Key",
+        value: `\`\`\`\n${licenseKey}\n\`\`\``,
+        inline: false,
+      },
+      {
+        name: "Validity",
+        value: expiryLabel(order),
+        inline: true,
+      },
+      {
+        name: "Devices",
+        value: "1 device only",
+        inline: true,
+      }
+    );
+
+    if (loaderUrl) {
+      fields.push({
+        name: "Loader",
+        value: `[Download Loader](${loaderUrl})`,
+        inline: false,
+      });
+    }
+
+    fields.push({
+      name: "Important",
+      value: "Ye key sirf 1 device ke liye hai. HWID reset nahi hoga.",
       inline: false,
     });
   }
-
-  fields.push({
-    name: "Important",
-    value:
-      "Ye key sirf 1 device ke liye hai. HWID reset nahi hoga.",
-    inline: false,
-  });
 
   const embed = {
     title: "Payment Verified",
@@ -196,7 +259,9 @@ export async function sendLicenseDM({ discordId, order }) {
   const message = await discordRequest(`/channels/${channelId}/messages`, {
     method: "POST",
     body: {
-      content: `<@${String(discordId)}> your license key is ready!`,
+      content: isContent
+        ? `<@${String(discordId)}> your delivery details are ready!`
+        : `<@${String(discordId)}> your license key is ready!`,
       embeds: [embed],
       allowed_mentions: { parse: [], users: [String(discordId)] },
     },
@@ -208,4 +273,7 @@ export async function sendLicenseDM({ discordId, order }) {
   };
 }
 
-export default sendLicenseDM;
+/** Backward-compatible alias for older imports. */
+export const sendLicenseDM = sendOrderDM;
+
+export default sendOrderDM;

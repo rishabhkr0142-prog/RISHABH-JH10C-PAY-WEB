@@ -13,6 +13,17 @@ const ORDER_STATUSES = [
   "completed",
 ];
 
+const DeliveryContentSchema = new mongoose.Schema(
+  {
+    title: { type: String, default: "", maxlength: 200 },
+    link: { type: String, default: "", maxlength: 2000 },
+    message: { type: String, default: "", maxlength: 5000 },
+    buttonLabel: { type: String, default: "", maxlength: 80 },
+    stockItem: { type: String, default: "", maxlength: 5000 },
+  },
+  { _id: false }
+);
+
 const OrderSchema = new mongoose.Schema(
   {
     // Buyer account id (Mongo User._id for new orders, legacy Discord ID for old ones)
@@ -118,6 +129,18 @@ const OrderSchema = new mongoose.Schema(
       lowercase: true,
       index: true,
     },
+    // Snapshot of how this order is fulfilled: "license" or "content".
+    deliveryType: {
+      type: String,
+      enum: ["license", "content"],
+      default: "license",
+      index: true,
+    },
+    // Immutable content snapshot created only after payment is verified.
+    deliveryContent: {
+      type: DeliveryContentSchema,
+      default: undefined,
+    },
     quantity: { type: Number, default: 1, min: 1 },
     notes: { type: String, default: "" },
     // License delivery (one order = one key, generated server-side only)
@@ -125,6 +148,8 @@ const OrderSchema = new mongoose.Schema(
     deliveredAt: { type: Date, default: null },
     licenseError: { type: String, default: "" },
     licenseAttempts: { type: Number, default: 0, min: 0 },
+    deliveryError: { type: String, default: "" },
+    deliveryAttempts: { type: Number, default: 0, min: 0 },
     // Discord DM delivery status
     dmSent: { type: Boolean, default: false },
     dmError: { type: String, default: "" },

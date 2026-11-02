@@ -24,6 +24,15 @@ export default function OrdersManager({
   const [confirmModal, setConfirmModal] = useState(null);
   const [revealedKeys, setRevealedKeys] = useState({});
   const [retryBusyId, setRetryBusyId] = useState(null);
+  const [resendBusyId, setResendBusyId] = useState(null);
+  const [deliveryEditOrder, setDeliveryEditOrder] = useState(null);
+  const [deliveryForm, setDeliveryForm] = useState({
+    deliveryTitle: "",
+    deliveryLink: "",
+    deliveryMessage: "",
+    deliveryButtonLabel: "",
+  });
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
 
   // Manual payment match modal
   const [matchingPayment, setMatchingPayment] = useState(null);
@@ -193,8 +202,8 @@ export default function OrdersManager({
       }
       setSuccessMsg(
         data.alreadyCompleted
-          ? "This order already has a license key."
-          : "License key generated and delivered."
+          ? "This order already has delivery details."
+          : "Delivery completed and sent."
       );
       setTimeout(() => setSuccessMsg(""), 4000);
       router.refresh();
@@ -202,6 +211,67 @@ export default function OrdersManager({
       setError(err.message);
     } finally {
       setRetryBusyId(null);
+    }
+  };
+
+  const handleResendDM = async (order) => {
+    setResendBusyId(order._id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/orders/${order._id}/resend-dm`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not resend the DM");
+      }
+      setSuccessMsg("Delivery details sent to the buyer's Discord DM.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResendBusyId(null);
+    }
+  };
+
+  const openDeliveryEditor = (order) => {
+    const content = order.deliveryContent || {};
+    setDeliveryForm({
+      deliveryTitle: content.title || "",
+      deliveryLink: content.link || "",
+      deliveryMessage: content.message || "",
+      deliveryButtonLabel: content.buttonLabel || "",
+    });
+    setDeliveryEditOrder(order);
+  };
+
+  const handleSaveDelivery = async (e) => {
+    e.preventDefault();
+    if (!deliveryEditOrder) return;
+    setDeliveryBusy(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `/api/admin/orders/${deliveryEditOrder._id}/delivery`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(deliveryForm),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not update delivery details");
+      }
+      setDeliveryEditOrder(null);
+      setSuccessMsg("Delivery details updated for this order.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeliveryBusy(false);
     }
   };
 
@@ -603,7 +673,7 @@ export default function OrdersManager({
                     <th className="py-3 font-medium">Product</th>
                     <th className="py-3 font-medium">Price</th>
                     <th className="py-3 font-medium">Status & Timing</th>
-                    <th className="py-3 font-medium">License & DM</th>
+                    <th className="py-3 font-medium">Delivery & DM</th>
                     <th className="py-3 font-medium">Time</th>
                     <th className="py-3 text-right font-medium">Quick Actions</th>
                   </tr>
@@ -611,6 +681,8 @@ export default function OrdersManager({
                 <tbody className="divide-y divide-white/5">
                   {filteredOrders.map((order) => {
                     const isBusy = busyId === order._id;
+                    const isContent = order.deliveryType === "content";
+                    const hasContent = Boolean(order.deliveryContent);
                     const isExpired =
                       order.status === "expired" ||
                       (order.status === "pending" &&
@@ -669,7 +741,50 @@ export default function OrdersManager({
                         </td>
                         <td className="py-3">
                           <div className="min-w-[190px] space-y-1.5">
-                            {order.licenseKey ? (
+                            {isContent ? (
+                              hasContent ? (
+                                <div className="space-y-1">
+                                  <p
+                                    className="max-w-[220px] truncate font-semibold text-white"
+                                    title={order.deliveryContent.title}
+                                  >
+                                    {order.deliveryContent.title || "Delivery ready"}
+                                  </p>
+                                  {order.deliveryContent.message && (
+                                    <p
+                                      className="max-w-[220px] truncate text-[10px] text-neutral-400"
+                                      title={order.deliveryContent.message}
+                                    >
+                                      {order.deliveryContent.message}
+                                    </p>
+                                  )}
+                                  {order.deliveryContent.link && (
+                                    <a
+                                      href={order.deliveryContent.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block max-w-[220px] truncate text-[10px] text-sky-300 hover:underline"
+                                    >
+                                      {order.deliveryContent.buttonLabel || "Open link"}
+                                    </a>
+                                  )}
+                                  {order.deliveryContent.stockItem && (
+                                    <p
+                                      className="max-w-[220px] truncate font-mono text-[10px] text-emerald-300"
+                                      title={order.deliveryContent.stockItem}
+                                    >
+                                      Item: {order.deliveryContent.stockItem}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] italic text-neutral-500">
+                                  {order.status === "processing"
+                                    ? "Preparing delivery..."
+                                    : "No content yet"}
+                                </span>
+                              )
+                            ) : order.licenseKey ? (
                               <div className="flex items-center gap-1.5">
                                 <code className="break-all rounded border border-theme-border bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300">
                                   {revealedKeys[order._id]
@@ -690,12 +805,21 @@ export default function OrdersManager({
                               </span>
                             )}
 
-                            {order.licenseError && !order.licenseKey && (
+                            {!isContent && order.licenseError && !order.licenseKey && (
                               <p
                                 className="max-w-[220px] truncate text-[10px] text-red-400"
                                 title={order.licenseError}
                               >
                                 {order.licenseError}
+                              </p>
+                            )}
+
+                            {isContent && order.deliveryError && !hasContent && (
+                              <p
+                                className="max-w-[220px] truncate text-[10px] text-red-400"
+                                title={order.deliveryError}
+                              >
+                                {order.deliveryError}
                               </p>
                             )}
 
@@ -715,7 +839,7 @@ export default function OrdersManager({
                               )}
                             </div>
 
-                            {!order.licenseKey &&
+                            {(!isContent ? !order.licenseKey : !hasContent) &&
                               ["paid", "processing", "completed"].includes(order.status) && (
                                 <button
                                   onClick={() => handleRetryLicense(order)}
@@ -724,7 +848,39 @@ export default function OrdersManager({
                                 >
                                   {retryBusyId === order._id
                                     ? "Retrying..."
-                                    : "Retry key generation"}
+                                    : "Retry delivery"}
+                                </button>
+                              )}
+
+                            {isContent && hasContent && order.status === "completed" && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  onClick={() => openDeliveryEditor(order)}
+                                  className="rounded border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white hover:text-black transition"
+                                >
+                                  Edit delivery
+                                </button>
+                                <button
+                                  onClick={() => handleResendDM(order)}
+                                  disabled={resendBusyId === order._id}
+                                  className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
+                                >
+                                  {resendBusyId === order._id ? "Sending..." : "Resend DM"}
+                                </button>
+                              </div>
+                            )}
+
+                            {!isContent &&
+                              order.status === "completed" &&
+                              order.licenseKey && (
+                                <button
+                                  onClick={() => handleResendDM(order)}
+                                  disabled={resendBusyId === order._id}
+                                  className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
+                                >
+                                  {resendBusyId === order._id
+                                    ? "Sending..."
+                                    : "Resend DM"}
                                 </button>
                               )}
                           </div>
@@ -743,7 +899,7 @@ export default function OrdersManager({
                               </button>
                             )}
                             {order.status !== "completed" &&
-                              Boolean(order.licenseKey) && (
+                              (isContent ? hasContent : Boolean(order.licenseKey)) && (
                               <button
                                 onClick={() => updateOrderStatus(order._id, "completed")}
                                 disabled={isBusy}
@@ -1076,6 +1232,120 @@ export default function OrdersManager({
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delivery Content Edit Modal */}
+      <AnimatePresence>
+        {deliveryEditOrder && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          >
+            <motion.form
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              onSubmit={handleSaveDelivery}
+              className="glass max-h-[90vh] w-full max-w-lg overflow-y-auto p-6 shadow-2xl"
+            >
+              <h3 className="text-base font-bold text-white">
+                Edit delivery for this order
+              </h3>
+              <p className="mt-1 text-[11px] text-neutral-400">
+                Order #{String(deliveryEditOrder._id).slice(-8)}. The unique stock
+                item (if any) is preserved.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                <div>
+                  <label className="label">Delivery Title</label>
+                  <input
+                    type="text"
+                    value={deliveryForm.deliveryTitle}
+                    onChange={(e) =>
+                      setDeliveryForm((f) => ({
+                        ...f,
+                        deliveryTitle: e.target.value,
+                      }))
+                    }
+                    className="input"
+                    maxLength={200}
+                  />
+                </div>
+                <div>
+                  <label className="label">Delivery Link</label>
+                  <input
+                    type="url"
+                    value={deliveryForm.deliveryLink}
+                    onChange={(e) =>
+                      setDeliveryForm((f) => ({
+                        ...f,
+                        deliveryLink: e.target.value,
+                      }))
+                    }
+                    placeholder="https://..."
+                    className="input"
+                    maxLength={2000}
+                  />
+                </div>
+                <div>
+                  <label className="label">Delivery Message</label>
+                  <textarea
+                    rows={5}
+                    value={deliveryForm.deliveryMessage}
+                    onChange={(e) =>
+                      setDeliveryForm((f) => ({
+                        ...f,
+                        deliveryMessage: e.target.value,
+                      }))
+                    }
+                    className="input resize-y"
+                    maxLength={5000}
+                  />
+                </div>
+                <div>
+                  <label className="label">Button Label</label>
+                  <input
+                    type="text"
+                    value={deliveryForm.deliveryButtonLabel}
+                    onChange={(e) =>
+                      setDeliveryForm((f) => ({
+                        ...f,
+                        deliveryButtonLabel: e.target.value,
+                      }))
+                    }
+                    placeholder="Open Link"
+                    className="input"
+                    maxLength={80}
+                  />
+                </div>
+                <p className="text-[10px] text-neutral-500">
+                  At least a link or message is required. Links must start with
+                  http:// or https://.
+                </p>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2.5 border-t border-theme-border/50 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setDeliveryEditOrder(null)}
+                  className="btn-ghost !py-2 !text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deliveryBusy}
+                  className="btn-primary !py-2 !text-xs font-bold"
+                >
+                  {deliveryBusy ? "Saving..." : "Save Delivery"}
+                </button>
+              </div>
+            </motion.form>
           </motion.div>
         )}
       </AnimatePresence>

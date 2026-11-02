@@ -229,6 +229,11 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                       <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-400">
                         {product.description || "Premium digital asset with instant fulfillment."}
                       </p>
+                      <p className="mt-2 text-[10px] font-medium text-neutral-500">
+                        {product.deliveryType === "content"
+                          ? "Delivery details and link after payment"
+                          : "License key delivered after payment"}
+                      </p>
 
                       {/* Features mini preview */}
                       {product.features && product.features.length > 0 && (

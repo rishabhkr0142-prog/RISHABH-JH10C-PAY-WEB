@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 const REASON_MESSAGES = {
   invalid_order_id: "Invalid order id.",
   not_found: "Order not found.",
-  not_paid: "Only paid orders can receive a license key.",
-  processing: "Key generation is already in progress. Please wait.",
-  generation_failed: "License generation failed. Please retry.",
+  not_paid: "Only paid orders can receive delivery details.",
+  processing: "Delivery is already in progress. Please wait.",
+  generation_failed: "Delivery failed. Please retry.",
+  out_of_stock: "This product is out of stock.",
 };
 
 /**
@@ -40,7 +41,7 @@ export async function POST(request, { params }) {
 
       return NextResponse.json(
         {
-          error: REASON_MESSAGES[result.reason] || "Could not generate license key.",
+          error: REASON_MESSAGES[result.reason] || "Could not complete delivery.",
           reason: result.reason,
           detail: result.error || "",
           order: result.order ? toPlainText(result.order) : null,
@@ -64,7 +65,7 @@ export async function POST(request, { params }) {
       err?.message || err
     );
     return NextResponse.json(
-      { error: "License retry failed. Please try again." },
+      { error: "Delivery retry failed. Please try again." },
       { status: 500 }
     );
   }

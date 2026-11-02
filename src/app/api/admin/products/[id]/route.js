@@ -5,6 +5,12 @@ import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
 import { normalizeImageUrl } from "@/lib/image-url";
+import {
+  parseProductDeliveryInput,
+  parseProductPlans,
+} from "@/lib/product-input";
+import { replaceUnclaimedStockItems } from "@/lib/product-stock";
+import ProductStockItem from "@/models/ProductStockItem";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +38,89 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
+    const current = await Product.findById(id).lean();
+    if (!current) {
+      return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    }
+
     const updates = {};
+    const touchesDelivery =
+      body?.deliveryType !== undefined ||
+      body?.productKey !== undefined ||
+      body?.deliveryTitle !== undefined ||
+      body?.deliveryLink !== undefined ||
+      body?.deliveryMessage !== undefined ||
+      body?.deliveryButtonLabel !== undefined ||
+      body?.plans !== undefined ||
+      body?.useStockItems !== undefined ||
+      body?.stockItems !== undefined ||
+      body?.stockItemsText !== undefined;
+
+    const delivery = parseProductDeliveryInput({
+      deliveryType:
+        body?.deliveryType !== undefined
+          ? body.deliveryType
+          : current.deliveryType,
+      deliveryTitle:
+        body?.deliveryTitle !== undefined
+          ? body.deliveryTitle
+          : current.deliveryTitle,
+      deliveryLink:
+        body?.deliveryLink !== undefined
+          ? body.deliveryLink
+          : current.deliveryLink,
+      deliveryMessage:
+        body?.deliveryMessage !== undefined
+          ? body.deliveryMessage
+          : current.deliveryMessage,
+      deliveryButtonLabel:
+        body?.deliveryButtonLabel !== undefined
+          ? body.deliveryButtonLabel
+          : current.deliveryButtonLabel,
+      useStockItems:
+        body?.useStockItems !== undefined
+          ? body.useStockItems
+          : current.useStockItems,
+      stockItems: body?.stockItems ?? body?.stockItemsText,
+    });
+
+    if (!delivery.ok) {
+      return NextResponse.json({ error: delivery.error }, { status: 400 });
+    }
+
+    if (delivery.deliveryType === "content" && !delivery.hasDeliveryBody) {
+      return NextResponse.json(
+        { error: "Content products need a delivery link or delivery message." },
+        { status: 400 }
+      );
+    }
+
+    let finalProductKey = normalizeProductKey(current.productKey);
+    if (body?.productKey !== undefined) {
+      finalProductKey = normalizeProductKey(body.productKey);
+      if (body.productKey && !finalProductKey) {
+        return NextResponse.json(
+          { error: `productKey must be one of: ${PRODUCT_KEYS.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      updates.productKey = finalProductKey;
+    }
+
+    if (
+      touchesDelivery &&
+      delivery.deliveryType === "license" &&
+      !finalProductKey
+    ) {
+      return NextResponse.json(
+        { error: "Select a license app (uid/lib) for license products." },
+        { status: 400 }
+      );
+    }
+
+    updates.deliveryType = delivery.deliveryType;
+    Object.assign(updates, delivery.delivery);
+    updates.useStockItems = delivery.useStockItems;
 
     if (body?.name !== undefined) {
       if (!String(body.name).trim()) {
@@ -48,17 +136,6 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ error: "Product slug already exists." }, { status: 400 });
       }
       updates.slug = newSlug;
-    }
-
-    if (body?.productKey !== undefined) {
-      const productKey = normalizeProductKey(body.productKey);
-      if (body.productKey && !productKey) {
-        return NextResponse.json(
-          { error: `productKey must be one of: ${PRODUCT_KEYS.join(", ")}` },
-          { status: 400 }
-        );
-      }
-      updates.productKey = productKey;
     }
 
     if (body?.description !== undefined) {
@@ -131,20 +208,11 @@ export async function PUT(request, { params }) {
     }
 
     if (body?.plans !== undefined) {
-      updates.plans = Array.isArray(body.plans)
-        ? body.plans
-            .filter((p) => p && typeof p === "object")
-            .map((p) => {
-              const days = Math.max(0, Number(p.days) || 0);
-              const autoLabel = days === 0 ? "Lifetime" : `${days} Day${days > 1 ? "s" : ""}`;
-              return {
-                label: String(p.label || "").trim() || autoLabel,
-                days,
-                price: Math.max(0, Number(p.price) || 0),
-                stock: p.stock !== undefined ? Math.max(0, Number(p.stock) || 0) : 10,
-              };
-            })
-        : [];
+      const parsedPlans = parseProductPlans(body.plans);
+      if (!parsedPlans.ok) {
+        return NextResponse.json({ error: parsedPlans.error }, { status: 400 });
+      }
+      updates.plans = parsedPlans.plans;
     }
 
     if (body?.active !== undefined) {
@@ -162,6 +230,10 @@ export async function PUT(request, { params }) {
 
     if (!product) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    }
+
+    if (body?.stockItems !== undefined || body?.stockItemsText !== undefined) {
+      await replaceUnclaimedStockItems(id, delivery.stockItems);
     }
 
     revalidatePath("/");
@@ -194,6 +266,8 @@ export async function DELETE(request, { params }) {
     if (!deleted) {
       return NextResponse.json({ error: "Product not found or already deleted." }, { status: 404 });
     }
+
+    await ProductStockItem.deleteMany({ productId: id });
 
     revalidatePath("/");
     revalidatePath("/products");

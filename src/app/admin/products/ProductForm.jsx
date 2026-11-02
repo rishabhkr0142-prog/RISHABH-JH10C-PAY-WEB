@@ -14,6 +14,13 @@ export default function ProductForm({ product, onClose }) {
     name: product?.name || "",
     slug: product?.slug || "",
     productKey: product?.productKey || "",
+    deliveryType: product?.deliveryType || "license",
+    deliveryTitle: product?.deliveryTitle || "",
+    deliveryLink: product?.deliveryLink || "",
+    deliveryMessage: product?.deliveryMessage || "",
+    deliveryButtonLabel: product?.deliveryButtonLabel || "",
+    useStockItems: product?.useStockItems ?? false,
+    stockItems: product?.stockItems?.join("\n") || "",
     category: product?.category || "Tools",
     price: product?.price ?? "",
     description: product?.description || "",
@@ -28,9 +35,15 @@ export default function ProductForm({ product, onClose }) {
             days: p.days ?? 0,
             price: p.price ?? "",
             stock: p.stock ?? 10,
+            deliveryTitle: p.deliveryTitle || "",
+            deliveryLink: p.deliveryLink || "",
+            deliveryMessage: p.deliveryMessage || "",
+            deliveryButtonLabel: p.deliveryButtonLabel || "",
           }))
         : [],
   });
+
+  const isContent = form.deliveryType === "content";
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -89,6 +102,10 @@ export default function ProductForm({ product, onClose }) {
             label: autoLabel,
             price: f.price || 0,
             stock: 10,
+            deliveryTitle: "",
+            deliveryLink: "",
+            deliveryMessage: "",
+            deliveryButtonLabel: "",
           },
         ],
       };
@@ -120,11 +137,35 @@ export default function ProductForm({ product, onClose }) {
     setSaving(true);
     setError("");
 
+    if (isContent && !form.deliveryLink.trim() && !form.deliveryMessage.trim()) {
+      setError("Content products need a delivery link or delivery message.");
+      setSaving(false);
+      return;
+    }
+
+    if (
+      isContent &&
+      form.deliveryLink.trim() &&
+      !/^https?:\/\//i.test(form.deliveryLink.trim())
+    ) {
+      setError("Delivery link must start with http:// or https://.");
+      setSaving(false);
+      return;
+    }
+
+    if (form.deliveryType === "license" && !form.productKey) {
+      setError("Select a license app (uid/lib) for license products.");
+      setSaving(false);
+      return;
+    }
+
     try {
       const payload = {
         ...form,
         price: Number(form.price),
         stock: Number(form.stock),
+        useStockItems: isContent && form.useStockItems,
+        stockItems: isContent && form.useStockItems ? form.stockItems : "",
         plans: form.plans.map((p) => {
           const d = Math.max(0, Number(p.days) || 0);
           return {
@@ -132,6 +173,10 @@ export default function ProductForm({ product, onClose }) {
             label: (p.label || "").trim() || (d === 0 ? "Lifetime" : `${d} Days`),
             price: Math.max(0, Number(p.price) || 0),
             stock: p.stock !== undefined ? Math.max(0, Number(p.stock) || 0) : 10,
+            deliveryTitle: isContent ? p.deliveryTitle || "" : "",
+            deliveryLink: isContent ? p.deliveryLink || "" : "",
+            deliveryMessage: isContent ? p.deliveryMessage || "" : "",
+            deliveryButtonLabel: isContent ? p.deliveryButtonLabel || "" : "",
           };
         }),
         features: form.features
@@ -230,24 +275,142 @@ export default function ProductForm({ product, onClose }) {
           </div>
 
           <div>
-            <label className="label">License App (auth panel)</label>
+            <label className="label">Delivery Type</label>
             <select
-              value={form.productKey}
-              onChange={set("productKey")}
+              value={form.deliveryType}
+              onChange={set("deliveryType")}
               className="input"
             >
-              <option value="">Not a license product</option>
-              {PRODUCT_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {PRODUCT_LABELS[key] || key} ({key})
-                </option>
-              ))}
+              <option value="license">License key (auth panel)</option>
+              <option value="content">Content / details (no license)</option>
             </select>
             <p className="mt-1 text-[11px] text-neutral-500">
-              Choose which auth-panel app generates keys for this product. UID Bypass
-              and LIB Bypass must use different apps.
+              License products generate a key after payment. Content products
+              deliver the title, link, message, and optional unique stock item
+              below.
             </p>
           </div>
+
+          {form.deliveryType === "license" ? (
+            <div>
+              <label className="label">License App (auth panel)</label>
+              <select
+                value={form.productKey}
+                onChange={set("productKey")}
+                className="input"
+              >
+                <option value="">Select a license app...</option>
+                {PRODUCT_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {PRODUCT_LABELS[key] || key} ({key})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Choose which auth-panel app generates keys for this product. UID Bypass
+                and LIB Bypass must use different apps.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-xl border border-white/10 bg-black/40 p-4">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                  Default Delivery Content
+                </h4>
+                <p className="mt-0.5 text-[11px] text-neutral-400">
+                  Plans can override any field below. At least a link or message
+                  is required.
+                </p>
+              </div>
+
+              <div>
+                <label className="label">Delivery Title</label>
+                <input
+                  type="text"
+                  value={form.deliveryTitle}
+                  onChange={set("deliveryTitle")}
+                  placeholder="e.g. Your WhatsApp Number"
+                  className="input"
+                  maxLength={200}
+                />
+              </div>
+
+              <div>
+                <label className="label">Delivery Link (optional)</label>
+                <input
+                  type="url"
+                  value={form.deliveryLink}
+                  onChange={set("deliveryLink")}
+                  placeholder="https://..."
+                  className="input"
+                  maxLength={2000}
+                />
+              </div>
+
+              <div>
+                <label className="label">Delivery Message</label>
+                <textarea
+                  rows={4}
+                  value={form.deliveryMessage}
+                  onChange={set("deliveryMessage")}
+                  placeholder={"Order details / instructions...\nLine breaks are preserved."}
+                  className="input resize-y"
+                  maxLength={5000}
+                />
+              </div>
+
+              <div>
+                <label className="label">Button Label</label>
+                <input
+                  type="text"
+                  value={form.deliveryButtonLabel}
+                  onChange={set("deliveryButtonLabel")}
+                  placeholder="Open Link"
+                  className="input"
+                  maxLength={80}
+                />
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="product-use-stock-items"
+                    checked={form.useStockItems}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        useStockItems: e.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-white focus:ring-0"
+                  />
+                  <label
+                    htmlFor="product-use-stock-items"
+                    className="text-xs font-medium text-neutral-300"
+                  >
+                    Unique stock mode (one item per order)
+                  </label>
+                </div>
+                {form.useStockItems && (
+                  <div className="mt-3">
+                    <label className="label">Stock Items (one per line)</label>
+                    <textarea
+                      rows={4}
+                      value={form.stockItems}
+                      onChange={set("stockItems")}
+                      placeholder={"account1:password\naccount2:password"}
+                      className="input resize-y font-mono text-xs"
+                    />
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      Each completed order atomically claims one line. Claimed
+                      items are never shown here again.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -302,7 +465,7 @@ export default function ProductForm({ product, onClose }) {
                 {form.plans.map((plan, idx) => (
                   <div
                     key={idx}
-                    className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-[#111] p-2.5 sm:flex-nowrap"
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-[#111] p-2.5"
                   >
                     <div className="w-20 shrink-0">
                       <span className="block text-[9px] uppercase font-semibold text-neutral-400">
@@ -368,6 +531,60 @@ export default function ProductForm({ product, onClose }) {
                         ✕
                       </button>
                     </div>
+
+                    {isContent && (
+                      <div className="w-full space-y-2 border-t border-white/10 pt-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                          Plan Delivery Override (optional)
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <input
+                            type="text"
+                            value={plan.deliveryTitle || ""}
+                            onChange={(e) =>
+                              handlePlanChange(idx, "deliveryTitle", e.target.value)
+                            }
+                            placeholder="Title override (blank = product default)"
+                            className="w-full rounded border border-white/15 bg-black px-2 py-1.5 text-xs text-white outline-none focus:border-white"
+                            maxLength={200}
+                          />
+                          <input
+                            type="url"
+                            value={plan.deliveryLink || ""}
+                            onChange={(e) =>
+                              handlePlanChange(idx, "deliveryLink", e.target.value)
+                            }
+                            placeholder="Link override (https://...)"
+                            className="w-full rounded border border-white/15 bg-black px-2 py-1.5 text-xs text-white outline-none focus:border-white"
+                            maxLength={2000}
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={plan.deliveryMessage || ""}
+                          onChange={(e) =>
+                            handlePlanChange(idx, "deliveryMessage", e.target.value)
+                          }
+                          placeholder="Message override (blank = product default)"
+                          className="w-full resize-y rounded border border-white/15 bg-black px-2 py-1.5 text-xs text-white outline-none focus:border-white"
+                          maxLength={5000}
+                        />
+                        <input
+                          type="text"
+                          value={plan.deliveryButtonLabel || ""}
+                          onChange={(e) =>
+                            handlePlanChange(
+                              idx,
+                              "deliveryButtonLabel",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Button label override"
+                          className="w-full rounded border border-white/15 bg-black px-2 py-1.5 text-xs text-white outline-none focus:border-white"
+                          maxLength={80}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -448,7 +665,9 @@ export default function ProductForm({ product, onClose }) {
               type="checkbox"
               id="product-active"
               checked={form.active}
-              onChange={set("active")}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, active: e.target.checked }))
+              }
               className="h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-white focus:ring-0"
             />
             <label htmlFor="product-active" className="text-xs font-medium text-neutral-300">

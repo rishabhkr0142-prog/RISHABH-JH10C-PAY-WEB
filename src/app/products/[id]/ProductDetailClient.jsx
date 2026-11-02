@@ -51,6 +51,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
   const [cooldownChecked, setCooldownChecked] = useState(false);
   const [orderModal, setOrderModal] = useState(null);
 
+  const isContent = product.deliveryType === "content";
   const inStock = product.stock === undefined || product.stock > 0;
   const isAvailable = product.active !== false && product.available !== false && inStock;
 
@@ -370,11 +371,20 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
             <span className="text-xs text-neutral-400">
               {selectedPlan
                 ? selectedPlan.days === 0
-                  ? "Lifetime license"
+                  ? isContent
+                    ? "Lifetime access"
+                    : "Lifetime license"
+                  : isContent
+                  ? `${selectedPlan.days}-day access`
                   : `${selectedPlan.days}-day license`
                 : "One-time payment"}
             </span>
           </div>
+          <p className="mt-2 text-[11px] text-neutral-400">
+            {isContent
+              ? "Delivery details and link are shown after payment is verified."
+              : "License key is delivered automatically after payment is verified."}
+          </p>
           {couponDiscount > 0 && (
             <p className="mt-1 text-[11px] font-semibold text-emerald-400">
               Coupon {appliedCoupon.code} applied — you save {formatPrice(couponDiscount)}
@@ -634,7 +644,9 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               <p className="mt-1 text-[11px] font-semibold text-white">Instant Delivery</p>
-              <p className="text-[10px] text-neutral-400">Automated queue</p>
+              <p className="text-[10px] text-neutral-400">
+                {isContent ? "Details after payment" : "Automated key delivery"}
+              </p>
             </div>
             <div className="glass p-3">
               <svg

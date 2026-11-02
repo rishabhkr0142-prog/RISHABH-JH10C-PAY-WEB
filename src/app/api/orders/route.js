@@ -14,6 +14,11 @@ import { rateLimit } from "@/lib/rate-limit";
 import { getCouponOffer } from "@/lib/offers";
 import { calculateDiscount } from "@/lib/offer-utils";
 import { normalizeProductKey } from "@/lib/product-keys";
+import {
+  normalizeDeliveryType,
+  resolveDeliveryContent,
+} from "@/lib/delivery-content";
+import { countAvailableStockItems } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -62,17 +67,18 @@ export async function POST(request) {
       );
     }
 
-    if (product.stock !== undefined && product.stock <= 0) {
+    if (!product.useStockItems && product.stock !== undefined && product.stock <= 0) {
       return NextResponse.json(
         { error: "Product is currently out of stock." },
         { status: 400 }
       );
     }
 
-    // The license app is always taken from the server-side product record,
-    // never from the request body.
+    // Delivery type and license app are always taken from the server-side
+    // product record, never from the request body.
+    const deliveryType = normalizeDeliveryType(product.deliveryType);
     const productKey = normalizeProductKey(product.productKey);
-    if (!productKey) {
+    if (deliveryType === "license" && !productKey) {
       return NextResponse.json(
         {
           error:
@@ -110,6 +116,7 @@ export async function POST(request) {
     const qty = Math.max(1, Number(quantity) || 1);
     let unitPrice = Number(product.price) || 0;
     let selectedPlanData = null;
+    let selectedPlanDoc = null;
     let resolvedPlanId = planId ? String(planId).trim() : "";
 
     if (Array.isArray(product.plans) && product.plans.length > 0) {
@@ -148,6 +155,7 @@ export async function POST(request) {
 
       unitPrice = Number(matchedPlan.price);
       resolvedPlanId = matchedPlan._id ? String(matchedPlan._id) : (matchedPlan.label || resolvedPlanId);
+      selectedPlanDoc = matchedPlan;
       selectedPlanData = {
         label:
           matchedPlan.label ||
@@ -155,6 +163,32 @@ export async function POST(request) {
         days: Number(matchedPlan.days) || 0,
         price: unitPrice,
       };
+    }
+
+    if (deliveryType === "content") {
+      const resolved = resolveDeliveryContent(product, selectedPlanDoc, {
+        productName: product.name,
+        plan: selectedPlanData,
+      });
+      if (!resolved.ok) {
+        return NextResponse.json(
+          {
+            error:
+              "This product's delivery details are not configured yet. Please contact support.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (product.useStockItems) {
+      const availableStock = await countAvailableStockItems(product._id);
+      if (availableStock <= 0) {
+        return NextResponse.json(
+          { error: "Product is currently out of stock." },
+          { status: 400 }
+        );
+      }
     }
 
     const basePrice = unitPrice * qty;
@@ -234,11 +268,18 @@ export async function POST(request) {
     if (existingPendingOrder) {
       if (
         existingPendingOrder.productKey !== productKey ||
-        existingPendingOrder.productName !== product.name
+        existingPendingOrder.productName !== product.name ||
+        existingPendingOrder.deliveryType !== deliveryType
       ) {
         await Order.updateOne(
           { _id: existingPendingOrder._id },
-          { $set: { productKey, productName: product.name } }
+          {
+            $set: {
+              productKey,
+              productName: product.name,
+              deliveryType,
+            },
+          }
         );
       }
 
@@ -341,6 +382,7 @@ export async function POST(request) {
       expiresAt,
       productName: product.name,
       productKey,
+      deliveryType,
       customerName: session.user.name || userDoc.username || "Customer",
       email: session.user.email || userDoc.email || "",
       discordId,

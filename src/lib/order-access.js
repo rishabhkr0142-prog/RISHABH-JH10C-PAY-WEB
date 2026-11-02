@@ -1,5 +1,6 @@
 import { isUserAdmin } from "@/lib/auth";
 import { isRealDiscordId, linkedDiscordId } from "@/lib/account";
+import { stripProductDeliveryFields } from "@/lib/delivery-content";
 
 /**
  * Server-side ownership helpers.
@@ -69,12 +70,35 @@ export function isLicenseOwner(order, session, userDoc) {
   return isOrderOwner(order, session, userDoc);
 }
 
-/** Remove the license key from an order snapshot for non-owners. */
+/**
+ * Strip delivery secrets/content from an order snapshot.
+ *
+ * - Non-owners never see license keys or content snapshots.
+ * - Owners only see content after payment has been verified and fulfillment
+ *   has completed. A pending/paid order must never reveal product content.
+ * - Populated product documents always have their delivery fields removed so a
+ *   pending order cannot leak the product default through `order.product`.
+ */
 export function redactOrderLicense(order, session, userDoc) {
   if (!order || typeof order !== "object") return order;
-  if (isLicenseOwner(order, session, userDoc)) return order;
+
+  const owner = isLicenseOwner(order, session, userDoc);
+  const admin = isUserAdmin(session);
   const safe = { ...order };
-  delete safe.licenseKey;
+
+  if (!owner && !admin) {
+    delete safe.licenseKey;
+    delete safe.deliveryContent;
+  }
+
+  if (!admin && order.status !== "completed") {
+    delete safe.deliveryContent;
+  }
+
+  if (safe.product && typeof safe.product === "object") {
+    safe.product = stripProductDeliveryFields(safe.product);
+  }
+
   return safe;
 }
 

@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { toPlainText } from "@/lib/serialize";
+import { stripProductDeliveryFields } from "@/lib/delivery-content";
+import { attachStockAvailability } from "@/lib/product-stock";
 import ProductDetailClient from "./ProductDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +41,8 @@ export default async function ProductDetailPage({ params, searchParams }) {
     ).lean();
 
     if (doc) {
-      product = toPlainText(doc);
+      const withStock = await attachStockAvailability(toPlainText(doc));
+      product = stripProductDeliveryFields(withStock);
     }
   } catch (err) {
     console.error("Product detail error:", err?.message || err);

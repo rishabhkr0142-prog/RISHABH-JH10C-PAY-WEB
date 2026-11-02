@@ -5,6 +5,8 @@ import connectDB from "@/lib/db";
 import Order, { ORDER_STATUSES } from "@/models/Order";
 import { decrementStat } from "@/lib/stats";
 import { completeOrder } from "@/lib/fulfillment";
+import { releaseProductStockItem } from "@/lib/product-stock";
+import { normalizeDeliveryType } from "@/lib/delivery-content";
 
 export const dynamic = "force-dynamic";
 
@@ -56,14 +58,16 @@ export async function PATCH(request, { params }) {
       );
     }
 
+    const isContent = normalizeDeliveryType(current.deliveryType) === "content";
     if (
       body.status === "completed" &&
-      !current.licenseKey
+      (isContent ? !current.deliveryContent : !current.licenseKey)
     ) {
       return NextResponse.json(
         {
-          error:
-            "An order can only be completed after its license key has been delivered.",
+          error: isContent
+            ? "An order can only be completed after its delivery content has been saved."
+            : "An order can only be completed after its license key has been delivered.",
         },
         { status: 400 }
       );
@@ -84,14 +88,18 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
-    // Marking an order as paid triggers automatic license delivery.
-    if (body.status === "paid" && !order.licenseKey) {
+    // Marking an order as paid triggers automatic delivery.
+    if (
+      body.status === "paid" &&
+      !order.licenseKey &&
+      !order.deliveryContent
+    ) {
       try {
         const fulfillment = await completeOrder(order._id);
         if (fulfillment?.order) order = fulfillment.order;
       } catch (fulfillmentErr) {
         console.error(
-          "License fulfillment failed after admin mark-paid:",
+          "Fulfillment failed after admin mark-paid:",
           fulfillmentErr?.message || fulfillmentErr
         );
       }
@@ -128,6 +136,7 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
+    await releaseProductStockItem(id);
     await decrementStat("orders");
     revalidatePath("/admin/orders");
     revalidatePath("/");

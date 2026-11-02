@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { toPlainText } from "@/lib/serialize";
+import { attachAdminStockData } from "@/lib/product-stock";
 import ProductsManager from "./ProductsManager";
 
 /**
@@ -13,7 +14,9 @@ export const revalidate = 0;
 
 export default async function AdminProductsPage() {
   await connectDB();
-  const products = toPlainText(await Product.find().sort({ createdAt: -1 }).lean());
+  const products = await attachAdminStockData(
+    toPlainText(await Product.find().sort({ createdAt: -1 }).lean())
+  );
 
   return <ProductsManager products={products} />;
 }

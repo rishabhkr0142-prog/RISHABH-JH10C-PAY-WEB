@@ -198,7 +198,11 @@ export default function ProductsManager({ products = [] }) {
                         <span className="badge-theme px-2 py-0.5 text-[10px]">
                           {p.category || "General"}
                         </span>
-                        {normalizeProductKey(p.productKey) ? (
+                        {p.deliveryType === "content" ? (
+                          <span className="mt-1.5 block text-[10px] font-semibold text-sky-300">
+                            Content delivery
+                          </span>
+                        ) : normalizeProductKey(p.productKey) ? (
                           <span className="mt-1.5 block text-[10px] font-semibold text-emerald-300">
                             {PRODUCT_LABELS[normalizeProductKey(p.productKey)]}
                           </span>
@@ -224,7 +228,16 @@ export default function ProductsManager({ products = [] }) {
                         )}
                       </td>
                       <td className="p-4 font-mono text-neutral-300">
-                        {p.stock !== undefined ? p.stock : "∞"}
+                        {p.useStockItems
+                          ? p.stockItemCount ?? 0
+                          : p.stock !== undefined
+                          ? p.stock
+                          : "∞"}
+                        {p.useStockItems && (
+                          <span className="ml-1 text-[10px] text-neutral-500">
+                            items
+                          </span>
+                        )}
                       </td>
                       <td className="p-4">
                         <button

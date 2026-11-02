@@ -13,14 +13,18 @@ export const dynamic = "force-dynamic";
 
 const REASON_MESSAGES = {
   not_found: "Order not found.",
-  not_paid: "Only paid orders can receive a license key.",
-  processing: "Key generation is already in progress. Please wait a moment.",
+  not_paid: "Only paid orders can receive delivery details.",
+  processing: "Delivery is already in progress. Please wait a moment.",
   generation_failed: "License generation failed. Please retry in a minute.",
+  missing_delivery_content:
+    "Delivery details are not configured. Please contact support.",
+  out_of_stock: "This product is out of stock. Please contact support.",
+  wrong_delivery_type: "This order does not support this retry.",
 };
 
 /**
  * POST /api/orders/:orderId/retry-license
- * Owner-only retry for a paid order whose key is missing/failed.
+ * Owner-only retry for a paid order whose delivery is missing/failed.
  * Rate-limited to prevent hammering the auth panel.
  */
 export async function POST(request, { params }) {
@@ -63,7 +67,8 @@ export async function POST(request, { params }) {
     if (!result.ok) {
       return NextResponse.json(
         {
-          error: REASON_MESSAGES[result.reason] || "Could not generate license key.",
+          error:
+            REASON_MESSAGES[result.reason] || "Could not complete delivery.",
           reason: result.reason,
         },
         { status: result.reason === "processing" ? 409 : 400 }
@@ -85,7 +90,7 @@ export async function POST(request, { params }) {
       err?.message || err
     );
     return NextResponse.json(
-      { error: "License retry failed. Please try again." },
+      { error: "Delivery retry failed. Please try again." },
       { status: 500 }
     );
   }

@@ -5,6 +5,11 @@ import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
 import { normalizeImageUrl } from "@/lib/image-url";
+import {
+  parseProductDeliveryInput,
+  parseProductPlans,
+} from "@/lib/product-input";
+import { replaceUnclaimedStockItems } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +48,32 @@ export async function POST(request) {
 
     const active = body?.active !== undefined ? Boolean(body.active) : body?.available !== false;
 
+    const delivery = parseProductDeliveryInput(body);
+    if (!delivery.ok) {
+      return NextResponse.json({ error: delivery.error }, { status: 400 });
+    }
+
     const productKey = normalizeProductKey(body?.productKey);
     if (body?.productKey && !productKey) {
       return NextResponse.json(
         { error: `productKey must be one of: ${PRODUCT_KEYS.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    if (delivery.deliveryType === "license" && !productKey) {
+      return NextResponse.json(
+        { error: "Select a license app (uid/lib) for license products." },
+        { status: 400 }
+      );
+    }
+
+    if (delivery.deliveryType === "content" && !delivery.hasDeliveryBody) {
+      return NextResponse.json(
+        {
+          error:
+            "Content products need a delivery link or delivery message.",
+        },
         { status: 400 }
       );
     }
@@ -99,29 +126,22 @@ export async function POST(request) {
 
     const mainImageUrl = parsedImages[0] || "";
 
-    // Parse duration plans
-    const parsedPlans = Array.isArray(plans)
-      ? plans
-          .filter((p) => p && typeof p === "object")
-          .map((p) => {
-            const days = Math.max(0, Number(p.days) || 0);
-            const autoLabel = days === 0 ? "Lifetime" : `${days} Day${days > 1 ? "s" : ""}`;
-            return {
-              label: String(p.label || "").trim() || autoLabel,
-              days,
-              price: Math.max(0, Number(p.price) || 0),
-              stock: p.stock !== undefined ? Math.max(0, Number(p.stock) || 0) : 10,
-            };
-          })
-      : [];
+    // Parse duration plans, including optional plan-level delivery overrides.
+    const parsedPlans = parseProductPlans(plans);
+    if (!parsedPlans.ok) {
+      return NextResponse.json({ error: parsedPlans.error }, { status: 400 });
+    }
 
     const product = await Product.create({
       name: String(name).trim(),
       productKey,
+      deliveryType: delivery.deliveryType,
+      ...delivery.delivery,
+      useStockItems: delivery.useStockItems,
       slug: finalSlug,
       description: String(description).trim(),
       price: numericPrice,
-      plans: parsedPlans,
+      plans: parsedPlans.plans,
       category: String(category).trim() || "General",
       images: parsedImages,
       imageUrl: mainImageUrl,
@@ -130,6 +150,10 @@ export async function POST(request) {
       active,
       available: active,
     });
+
+    if (delivery.useStockItems) {
+      await replaceUnclaimedStockItems(product._id, delivery.stockItems);
+    }
 
     revalidatePath("/");
     revalidatePath("/products");

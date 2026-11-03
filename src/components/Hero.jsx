@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { DiscordIcon } from "@/components/Navbar";
+import Logo from "@/components/Logo";
 
 export default function Hero({ discordUrl = "#" }) {
   const fadeUp = (delay = 0) => ({
@@ -27,8 +28,21 @@ export default function Hero({ discordUrl = "#" }) {
       </div>
 
       <div className="relative mx-auto max-w-4xl">
+        {/* Brand Logo Showcase */}
+        <motion.div {...fadeUp(0)} className="mb-6 flex justify-center">
+          <div className="group relative">
+            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-white/10 via-white/25 to-white/10 opacity-50 blur-lg transition duration-500 group-hover:opacity-80" />
+            <Logo
+              variant="full"
+              size={190}
+              priority={true}
+              className="relative !border-white/15 !bg-black/95 !p-2.5 shadow-2xl transition-transform duration-300 group-hover:scale-105"
+            />
+          </div>
+        </motion.div>
+
         {/* Eyebrow badge */}
-        <motion.div {...fadeUp(0)}>
+        <motion.div {...fadeUp(0.08)}>
           <span className="badge-theme px-3.5 py-1 text-xs font-semibold backdrop-blur shadow-sm">
             <span
               className="h-1.5 w-1.5 rounded-full animate-pulse"

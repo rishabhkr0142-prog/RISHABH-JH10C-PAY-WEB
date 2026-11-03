@@ -245,13 +245,25 @@ export async function sendOrderDM({ discordId, order }) {
     });
   }
 
+  const siteUrl = String(
+    process.env.SITE_URL ||
+    process.env.APP_URL ||
+    process.env.NEXTAUTH_URL ||
+    "https://rishabh-jh10c-pay-web.antideploy.app"
+  ).replace(/\/$/, "");
+  const logoIconUrl = `${siteUrl}/logo-icon.png`;
+
   const embed = {
     title: "Payment Verified",
     description: `Order #${String(order?._id || "").slice(-8)} has been fulfilled.`,
     color: 0x22c55e,
+    thumbnail: {
+      url: logoIconUrl,
+    },
     fields,
     footer: {
-      text: `Need help? ${supportUrl}`,
+      text: `RISHABH JH10C PAY WEB · Need help? ${supportUrl}`,
+      icon_url: logoIconUrl,
     },
     timestamp: new Date().toISOString(),
   };

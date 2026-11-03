@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { DiscordIcon } from "@/components/Navbar";
+import Logo from "@/components/Logo";
 
 const AUTH_ERRORS = {
   OAuthCallback: {
@@ -144,12 +145,9 @@ function LoginContent() {
         transition={{ duration: 0.4 }}
         className="glass w-full max-w-sm p-8 text-center shadow-2xl"
       >
-        <span
-          className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-theme-border shadow-lg"
-          style={{ backgroundColor: "var(--accent-primary)", color: "var(--btn-primary-text)" }}
-        >
-          <DiscordIcon className="h-6 w-6" />
-        </span>
+        <div className="mx-auto flex justify-center">
+          <Logo variant="icon" size={54} priority={true} className="!border-theme-border shadow-lg" />
+        </div>
 
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-white">
           Welcome to <span className="text-gradient">JH10C</span>

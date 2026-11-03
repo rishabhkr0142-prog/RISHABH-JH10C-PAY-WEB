@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { NavbarThemeToggle } from "./ThemeSwitcher";
+import BrandLogo from "./Logo";
 
 export function DiscordIcon({ className = "h-4 w-4" }) {
   return (
@@ -18,9 +19,7 @@ export function DiscordIcon({ className = "h-4 w-4" }) {
 function Logo() {
   return (
     <Link href="/" className="group flex items-center gap-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-xs font-black tracking-tight text-white shadow-sm transition group-hover:scale-105">
-        RJ
-      </span>
+      <BrandLogo variant="icon" size={34} priority={true} className="!border-theme-border shrink-0" />
       <span className="hidden font-sans text-sm font-bold tracking-tight text-white transition group-hover:text-neutral-300 min-[400px]:inline">
         RISHABH JH10C <span className="font-mono text-xs font-normal text-gradient">PAY WEB</span>
       </span>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DiscordIcon } from "@/components/Navbar";
 import { getAllSettings } from "@/lib/settings";
+import Logo from "@/components/Logo";
 
 export default async function Footer() {
   const year = new Date().getFullYear();
@@ -20,14 +21,7 @@ export default async function Footer() {
       <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-[2fr_1fr_1fr]">
         {/* Brand */}
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-theme-border bg-theme-surface text-xs font-black text-white">
-              RJ
-            </span>
-            <span className="font-sans text-sm font-bold tracking-tight text-white">
-              {siteName}
-            </span>
-          </div>
+          <Logo variant="combo" size={32} subtext="PAY WEB" href="/" />
           <p className="mt-3.5 max-w-sm text-xs leading-relaxed text-neutral-400">
             Engineered for high-speed digital transactions. Verified Discord authentication,
             instant automated provisioning, and dedicated 24/7 client care.

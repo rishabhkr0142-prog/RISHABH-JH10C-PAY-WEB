@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "@/components/Logo";
 
 const ERROR_DETAILS = {
   Configuration: {
@@ -55,6 +56,9 @@ export default function AuthErrorPage({ searchParams }) {
   return (
     <section className="relative flex min-h-[75vh] items-center justify-center px-4">
       <div className="glass w-full max-w-md p-8 text-center shadow-2xl">
+        <div className="mx-auto mb-5 flex justify-center">
+          <Logo variant="icon" size={44} className="!border-theme-border shadow-md" href="/" />
+        </div>
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-red-500/30 bg-red-950/40 text-red-400">
           <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />

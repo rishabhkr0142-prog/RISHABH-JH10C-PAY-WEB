@@ -14,7 +14,7 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
   },
 
-  // HTTP Security Headers
+  // HTTP Security Headers & Asset Caching
   async headers() {
     return [
       {
@@ -32,6 +32,15 @@ const nextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+      {
+        source: "/:all*(svg|jpg|png|webp|ico|webmanifest)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },

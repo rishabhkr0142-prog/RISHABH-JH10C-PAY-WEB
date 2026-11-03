@@ -9,6 +9,7 @@ import { formatPrice, timeAgo } from "@/lib/format";
 import CountUp from "@/components/CountUp";
 import { DiscordIcon } from "@/components/Navbar";
 import WhatsAppSupport from "@/components/WhatsAppSupport";
+import Logo from "@/components/Logo";
 
 const LINK_ERROR_MESSAGES = {
   discord_already_linked: "Discord is already linked to this account.",
@@ -377,7 +378,15 @@ export default function DashboardClient({
       .join("\n");
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-28 pt-10 sm:px-8">
+    <div className="mx-auto max-w-6xl px-4 pb-28 pt-8 sm:px-8">
+      {/* Brand Breadcrumb */}
+      <div className="mb-4 flex items-center gap-2">
+        <Logo variant="icon" size={24} className="!border-theme-border shrink-0" />
+        <span className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+          RISHABH JH10C Client Portal
+        </span>
+      </div>
+
       {/* ── Welcome Header Bar ── */}
       <div className="flex flex-col gap-5 border-b border-theme-border pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "@/components/Logo";
 
 export default function NotFound() {
   return (
@@ -12,6 +13,9 @@ export default function NotFound() {
       </div>
 
       <div className="glass w-full max-w-md p-10 text-center shadow-2xl">
+        <div className="mx-auto mb-6 flex justify-center">
+          <Logo variant="icon" size={52} className="!border-theme-border shadow-lg" href="/" />
+        </div>
         <p className="font-mono text-7xl font-extrabold tracking-tight text-white">
           404
         </p>

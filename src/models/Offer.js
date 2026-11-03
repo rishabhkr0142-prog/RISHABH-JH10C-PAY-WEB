@@ -28,6 +28,8 @@ const OfferSchema = new mongoose.Schema(
     },
     productName: { type: String, default: "", trim: true },
     imageUrl: { type: String, default: "", trim: true },
+    // Cloudinary public id for uploaded images (used to remove replaced files)
+    imagePublicId: { type: String, default: "", trim: true },
     startsAt: { type: Date, default: Date.now },
     endsAt: { type: Date, required: true, index: true },
     active: { type: Boolean, default: true, index: true },

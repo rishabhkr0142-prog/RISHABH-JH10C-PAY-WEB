@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Offer from "@/models/Offer";
+import { normalizeOfferImageUrl } from "@/lib/image-url";
+import { deleteImageSafe } from "@/lib/cloudinary";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +64,34 @@ export async function PUT(request, { params }) {
       updates.couponCode = String(body.couponCode || "").trim().toUpperCase();
     }
     if (body?.productName !== undefined) updates.productName = String(body.productName || "").trim();
-    if (body?.imageUrl !== undefined) updates.imageUrl = String(body.imageUrl || "").trim();
+
+    let replacedImagePublicId = "";
+    if (body?.imageUrl !== undefined) {
+      const rawImageUrl = String(body.imageUrl || "").trim();
+      const imageUrl = normalizeOfferImageUrl(rawImageUrl);
+
+      if (rawImageUrl && !imageUrl) {
+        return NextResponse.json(
+          { error: "Image URL must be a valid public https link (or upload a file)." },
+          { status: 400 }
+        );
+      }
+
+      const imageChanged = imageUrl !== (existing.imageUrl || "");
+
+      updates.imageUrl = imageUrl;
+      if (imageChanged) {
+        updates.imagePublicId = imageUrl
+          ? String(body?.imagePublicId || "").trim()
+          : "";
+        if (existing.imagePublicId) {
+          replacedImagePublicId = existing.imagePublicId;
+        }
+      }
+    } else if (body?.imagePublicId !== undefined) {
+      updates.imagePublicId = String(body.imagePublicId || "").trim();
+    }
+
     if (body?.productId !== undefined) {
       updates.productId =
         body.productId && OBJECT_ID.test(String(body.productId)) ? body.productId : null;
@@ -103,6 +132,10 @@ export async function PUT(request, { params }) {
       runValidators: true,
     }).lean();
 
+    if (replacedImagePublicId) {
+      await deleteImageSafe(replacedImagePublicId);
+    }
+
     revalidatePath("/");
     revalidatePath("/admin/offers");
 
@@ -130,6 +163,10 @@ export async function DELETE(request, { params }) {
     const deleted = await Offer.findByIdAndDelete(id).lean();
     if (!deleted) {
       return NextResponse.json({ error: "Offer not found or already deleted." }, { status: 404 });
+    }
+
+    if (deleted.imagePublicId) {
+      await deleteImageSafe(deleted.imagePublicId);
     }
 
     revalidatePath("/");

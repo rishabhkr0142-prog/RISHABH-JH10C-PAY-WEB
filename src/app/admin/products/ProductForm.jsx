@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { PRODUCT_KEYS, PRODUCT_LABELS } from "@/lib/product-keys";
-import ProductImage from "@/components/ProductImage";
+import ImageUploadField from "@/components/ImageUploadField";
 
 export default function ProductForm({ product, onClose }) {
   const isEdit = Boolean(product);
@@ -47,41 +47,12 @@ export default function ProductForm({ product, onClose }) {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
 
   const set = (key) => (e) =>
     setForm((f) => ({
       ...f,
       [key]: e.target.type === "checkbox" ? e.target.checked : e.target.value,
     }));
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setUploadError("");
-
-    try {
-      const body = new FormData();
-      body.append("file", file);
-
-      const res = await fetch("/api/admin/upload", { method: "POST", body });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data.error || "Image upload failed.");
-      }
-
-      setForm((f) => ({ ...f, imageUrl: data.url }));
-    } catch (err) {
-      setUploadError(err.message || "Image upload failed.");
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
-  };
 
   const handleAddPlan = () => {
     setForm((f) => {
@@ -593,49 +564,13 @@ export default function ProductForm({ product, onClose }) {
 
           <div>
             <label className="label">Product Image</label>
-
-            <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/40 p-3 sm:flex-row sm:items-center">
-              <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black sm:w-40">
-                <ProductImage
-                  src={form.imageUrl}
-                  alt={form.name || "Product image preview"}
-                  sizes="160px"
-                  fallbackText={form.name}
-                />
-              </div>
-
-              <div className="w-full space-y-2">
-                <label
-                  className={`flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-white/40 hover:bg-white/10 ${
-                    uploading ? "cursor-wait opacity-70" : ""
-                  }`}
-                >
-                  {uploading ? "Uploading..." : "Upload image (max 5 MB)"}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-                    onChange={handleImageUpload}
-                    disabled={uploading}
-                    className="hidden"
-                  />
-                </label>
-                <p className="text-[11px] leading-relaxed text-neutral-500">
-                  Uploaded to Cloudinary and saved as a permanent https URL.
-                </p>
-                {uploadError && <p className="text-[11px] text-red-400">{uploadError}</p>}
-              </div>
-            </div>
-
-            <input
-              type="url"
+            <ImageUploadField
               value={form.imageUrl}
-              onChange={set("imageUrl")}
-              placeholder="https://res.cloudinary.com/..."
-              className="input mt-3"
+              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+              folder="rishabh-jh10c/products"
+              alt={form.name || "Product image preview"}
+              fallbackText={form.name}
             />
-            <p className="mt-1 text-[11px] text-neutral-500">
-              Use the upload button above. Only Cloudinary image URLs render on the storefront.
-            </p>
           </div>
 
           <div>

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Offer from "@/models/Offer";
+import { normalizeOfferImageUrl } from "@/lib/image-url";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,19 @@ export async function POST(request) {
     const productId =
       body?.productId && OBJECT_ID.test(String(body.productId)) ? body.productId : null;
 
+    const rawImageUrl = String(body?.imageUrl || "").trim();
+    const imageUrl = normalizeOfferImageUrl(rawImageUrl);
+    if (rawImageUrl && !imageUrl) {
+      return NextResponse.json(
+        { error: "Image URL must be a valid public https link (or upload a file)." },
+        { status: 400 }
+      );
+    }
+
+    const imagePublicId = imageUrl
+      ? String(body?.imagePublicId || "").trim()
+      : "";
+
     const offer = await Offer.create({
       title,
       description: String(body?.description || "").trim(),
@@ -65,7 +79,8 @@ export async function POST(request) {
       couponCode: String(body?.couponCode || "").trim().toUpperCase(),
       productId,
       productName: String(body?.productName || "").trim(),
-      imageUrl: String(body?.imageUrl || "").trim(),
+      imageUrl,
+      imagePublicId,
       startsAt,
       endsAt,
       active: body?.active !== undefined ? Boolean(body.active) : true,

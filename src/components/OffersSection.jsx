@@ -61,7 +61,7 @@ export default function OffersSection({ offers = [] }) {
               transition={{ duration: 0.4, delay: index * 0.06 }}
               className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] transition hover:border-white/25 hover:bg-[#111111]"
             >
-              <div className="relative h-40 overflow-hidden border-b border-white/10 bg-black">
+              <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-white/10 bg-black">
                 <ProductImage
                   src={offer.imageUrl}
                   alt={offer.title}

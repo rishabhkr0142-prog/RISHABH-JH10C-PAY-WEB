@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { toDateTimeLocal } from "@/lib/offer-utils";
+import ImageUploadField from "@/components/ImageUploadField";
 
 function defaultStart() {
   return toDateTimeLocal(new Date());
@@ -28,6 +29,7 @@ export default function OfferForm({ offer, products = [], onClose }) {
     productId: offer?.productId ? String(offer.productId) : "",
     productName: offer?.productName || "",
     imageUrl: offer?.imageUrl || "",
+    imagePublicId: offer?.imagePublicId || "",
     startsAt: toDateTimeLocal(offer?.startsAt) || defaultStart(),
     endsAt: toDateTimeLocal(offer?.endsAt) || defaultEnd(),
     active: offer?.active ?? true,
@@ -215,13 +217,15 @@ export default function OfferForm({ offer, products = [], onClose }) {
           </div>
 
           <div>
-            <label className="label">Image URL (optional)</label>
-            <input
-              type="url"
+            <label className="label">Image</label>
+            <ImageUploadField
               value={form.imageUrl}
-              onChange={set("imageUrl")}
-              placeholder="https://..."
-              className="input"
+              onChange={(url, publicId) =>
+                setForm((f) => ({ ...f, imageUrl: url, imagePublicId: publicId || "" }))
+              }
+              folder="rishabh-jh10c/offers"
+              alt={form.title || "Offer image preview"}
+              fallbackText={form.title || "OFFER"}
             />
           </div>
 

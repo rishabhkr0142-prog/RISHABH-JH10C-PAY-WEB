@@ -1,6 +1,7 @@
 import crypto from "crypto";
 
 const CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1";
+const CLOUDINARY_DESTROY_URL = "https://api.cloudinary.com/v1_1";
 
 function getConfig() {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -55,4 +56,51 @@ export async function uploadImage(buffer, { folder = "products" } = {}) {
   }
 
   return data;
+}
+
+/**
+ * Delete an uploaded image from Cloudinary by its public id.
+ */
+export async function deleteImage(publicId) {
+  if (!publicId) return { result: "skipped" };
+
+  const { cloudName, apiKey, apiSecret } = getConfig();
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signedParams = { public_id: publicId, timestamp };
+  const signature = signParams(signedParams, apiSecret);
+
+  const formData = new FormData();
+  formData.append("public_id", publicId);
+  formData.append("api_key", apiKey);
+  formData.append("timestamp", String(timestamp));
+  formData.append("signature", signature);
+
+  const res = await fetch(`${CLOUDINARY_DESTROY_URL}/${cloudName}/image/destroy`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      data?.error?.message || `Cloudinary delete failed (HTTP ${res.status}).`
+    );
+  }
+
+  return data;
+}
+
+/**
+ * Best-effort delete used after a record is removed/replaced. Never throws so
+ * a Cloudinary hiccup cannot break the admin action.
+ */
+export async function deleteImageSafe(publicId) {
+  try {
+    return await deleteImage(publicId);
+  } catch (err) {
+    console.error("Cloudinary delete failed:", err?.message || err);
+    return { result: "error" };
+  }
 }

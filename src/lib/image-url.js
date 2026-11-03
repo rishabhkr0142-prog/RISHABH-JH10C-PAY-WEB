@@ -30,6 +30,17 @@ export function normalizeImageUrl(value) {
 }
 
 /**
+ * Strict validator for admin-entered offer image links. Only absolute https
+ * URLs are accepted; empty stays empty. Returns "" for anything else.
+ */
+export function normalizeOfferImageUrl(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (!/^https:\/\//i.test(raw)) return "";
+  return normalizeImageUrl(raw);
+}
+
+/**
  * Whether next/image can safely render this URL with the configured
  * remotePatterns (res.cloudinary.com only) without throwing.
  */

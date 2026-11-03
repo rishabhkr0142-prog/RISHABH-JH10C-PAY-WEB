@@ -5,7 +5,7 @@ import Link from "next/link";
  * Unified Logo Component for RISHABH JH10C PAY WEB
  *
  * @param {Object} props
- * @param {'icon' | 'full' | 'combo'} [props.variant='icon'] - 'icon' (square crown+R), 'full' (crown+R+text banner), 'combo' (icon + styled brand text)
+ * @param {'icon' | 'combo'} [props.variant='icon'] - 'icon' (square crown+R), 'combo' (icon + styled brand text)
  * @param {number} [props.size] - Width/height in pixels
  * @param {boolean} [props.priority=false] - For above-the-fold images like navbar
  * @param {string} [props.className=''] - Additional container classes
@@ -25,27 +25,10 @@ export default function Logo({
   href,
 }) {
   // Determine sizing defaults
-  const iconSize = size || (variant === "full" ? 220 : 36);
+  const iconSize = size || 36;
   const iconSrc = iconSize <= 128 ? "/logo-icon-128.png" : "/logo-icon.png";
 
   const renderVisual = () => {
-    if (variant === "full") {
-      return (
-        <div
-          className={`relative inline-flex items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/80 p-2 shadow-2xl backdrop-blur-md transition-all duration-300 hover:border-white/20 hover:shadow-[0_0_35px_rgba(255,255,255,0.08)] ${className}`}
-        >
-          <Image
-            src="/logo.png"
-            alt="RISHABH JH10C logo"
-            width={iconSize}
-            height={iconSize}
-            priority={priority}
-            className="h-auto w-auto max-w-full rounded-xl object-contain"
-          />
-        </div>
-      );
-    }
-
     if (variant === "combo" || showText) {
       return (
         <div className={`group flex items-center gap-3 ${className}`}>

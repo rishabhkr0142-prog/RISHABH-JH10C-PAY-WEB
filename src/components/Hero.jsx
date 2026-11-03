@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { DiscordIcon } from "@/components/Navbar";
-import Logo from "@/components/Logo";
 
 export default function Hero({ discordUrl = "#" }) {
   const fadeUp = (delay = 0) => ({
@@ -13,7 +12,7 @@ export default function Hero({ discordUrl = "#" }) {
   });
 
   return (
-    <section className="relative overflow-hidden px-4 pt-20 pb-12 text-center sm:px-8 sm:pt-28">
+    <section className="relative overflow-hidden px-4 pt-10 pb-12 text-center sm:px-8 sm:pt-16">
       {/* Dynamic ambient glow & pattern */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="bg-dots absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_30%,black,transparent)]" />
@@ -28,19 +27,6 @@ export default function Hero({ discordUrl = "#" }) {
       </div>
 
       <div className="relative mx-auto max-w-4xl">
-        {/* Brand Logo Showcase */}
-        <motion.div {...fadeUp(0)} className="mb-6 flex justify-center">
-          <div className="group relative">
-            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-white/10 via-white/25 to-white/10 opacity-50 blur-lg transition duration-500 group-hover:opacity-80" />
-            <Logo
-              variant="full"
-              size={190}
-              priority={true}
-              className="relative !border-white/15 !bg-black/95 !p-2.5 shadow-2xl transition-transform duration-300 group-hover:scale-105"
-            />
-          </div>
-        </motion.div>
-
         {/* Eyebrow badge */}
         <motion.div {...fadeUp(0.08)}>
           <span className="badge-theme px-3.5 py-1 text-xs font-semibold backdrop-blur shadow-sm">

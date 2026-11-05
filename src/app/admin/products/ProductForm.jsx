@@ -26,15 +26,20 @@ export default function ProductForm({ product, onClose }) {
     description: product?.description || "",
     imageUrl: product?.imageUrl || (product?.images && product.images[0]) || "",
     stock: product?.stock ?? 10,
+    stockMode: product?.stockMode || "unlimited",
+    outOfStock: product?.outOfStock ?? false,
     features: product?.features ? product.features.join("\n") : "",
     active: product?.active ?? product?.available ?? true,
     plans:
       product?.plans && product.plans.length > 0
         ? product.plans.map((p) => ({
+            _id: p._id,
             label: p.label || "",
             days: p.days ?? 0,
             price: p.price ?? "",
+            stockMode: p.stockMode || "unlimited",
             stock: p.stock ?? 10,
+            outOfStock: p.outOfStock ?? false,
             deliveryTitle: p.deliveryTitle || "",
             deliveryLink: p.deliveryLink || "",
             deliveryMessage: p.deliveryMessage || "",
@@ -72,7 +77,9 @@ export default function ProductForm({ product, onClose }) {
             days: nextDays,
             label: autoLabel,
             price: f.price || 0,
+            stockMode: "unlimited",
             stock: 10,
+            outOfStock: false,
             deliveryTitle: "",
             deliveryLink: "",
             deliveryMessage: "",
@@ -134,16 +141,21 @@ export default function ProductForm({ product, onClose }) {
       const payload = {
         ...form,
         price: Number(form.price),
+        stockMode: form.stockMode || "unlimited",
         stock: Number(form.stock),
+        outOfStock: Boolean(form.outOfStock),
         useStockItems: isContent && form.useStockItems,
         stockItems: isContent && form.useStockItems ? form.stockItems : "",
         plans: form.plans.map((p) => {
           const d = Math.max(0, Number(p.days) || 0);
           return {
+            ...(p._id ? { _id: p._id } : {}),
             days: d,
             label: (p.label || "").trim() || (d === 0 ? "Lifetime" : `${d} Days`),
             price: Math.max(0, Number(p.price) || 0),
+            stockMode: p.stockMode || "unlimited",
             stock: p.stock !== undefined ? Math.max(0, Number(p.stock) || 0) : 10,
+            outOfStock: Boolean(p.outOfStock),
             deliveryTitle: isContent ? p.deliveryTitle || "" : "",
             deliveryLink: isContent ? p.deliveryLink || "" : "",
             deliveryMessage: isContent ? p.deliveryMessage || "" : "",
@@ -383,7 +395,7 @@ export default function ProductForm({ product, onClose }) {
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <label className="label">Base Price (INR)</label>
               <input
@@ -397,14 +409,51 @@ export default function ProductForm({ product, onClose }) {
               />
             </div>
             <div>
+              <label className="label">Stock Mode</label>
+              <select
+                value={form.stockMode || "unlimited"}
+                onChange={set("stockMode")}
+                className="input"
+              >
+                <option value="unlimited">Unlimited</option>
+                <option value="limited">Limited</option>
+              </select>
+            </div>
+            <div>
               <label className="label">Stock Units</label>
               <input
                 type="number"
+                min="0"
                 value={form.stock}
                 onChange={set("stock")}
-                className="input"
+                disabled={form.stockMode !== "limited"}
+                className="input disabled:opacity-50"
               />
             </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-black/30 p-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="product-out-of-stock"
+                checked={Boolean(form.outOfStock)}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, outOfStock: e.target.checked }))
+                }
+                className="h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-white focus:ring-0"
+              />
+              <label
+                htmlFor="product-out-of-stock"
+                className="text-xs font-medium text-neutral-300"
+              >
+                Mark Out of Stock (whole product)
+              </label>
+            </div>
+            <p className="mt-1 text-[11px] text-neutral-500">
+              Product-level stock is used when no plans exist. Duration plans
+              set their own mode/stock below. Unlimited products never count down.
+            </p>
           </div>
 
           {/* Nitro-Style Duration Pricing Plans */}
@@ -479,7 +528,23 @@ export default function ProductForm({ product, onClose }) {
                       />
                     </div>
 
-                    <div className="w-16 shrink-0">
+                    <div className="w-24 shrink-0">
+                      <span className="block text-[9px] uppercase font-semibold text-neutral-400">
+                        Stock Mode
+                      </span>
+                      <select
+                        value={plan.stockMode || "unlimited"}
+                        onChange={(e) =>
+                          handlePlanChange(idx, "stockMode", e.target.value)
+                        }
+                        className="mt-1 w-full rounded border border-white/15 bg-black px-2 py-1 text-xs text-white outline-none focus:border-white"
+                      >
+                        <option value="unlimited">Unlimited</option>
+                        <option value="limited">Limited</option>
+                      </select>
+                    </div>
+
+                    <div className="w-20 shrink-0">
                       <span className="block text-[9px] uppercase font-semibold text-neutral-400">
                         Stock
                       </span>
@@ -487,9 +552,24 @@ export default function ProductForm({ product, onClose }) {
                         type="number"
                         min="0"
                         value={plan.stock ?? 10}
+                        disabled={plan.stockMode !== "limited"}
                         onChange={(e) => handlePlanChange(idx, "stock", e.target.value)}
-                        className="mt-1 w-full rounded border border-white/15 bg-black px-2 py-1 text-xs font-mono text-neutral-300 outline-none focus:border-white"
+                        className="mt-1 w-full rounded border border-white/15 bg-black px-2 py-1 text-xs font-mono text-neutral-300 outline-none focus:border-white disabled:opacity-40"
                       />
+                    </div>
+
+                    <div className="w-20 shrink-0 pt-4">
+                      <label className="flex items-center gap-1 text-[10px] font-medium text-neutral-400">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(plan.outOfStock)}
+                          onChange={(e) =>
+                            handlePlanChange(idx, "outOfStock", e.target.checked)
+                          }
+                          className="h-3.5 w-3.5 rounded border-neutral-700 bg-neutral-900 text-white focus:ring-0"
+                        />
+                        Out of stock
+                      </label>
                     </div>
 
                     <div className="pt-4">

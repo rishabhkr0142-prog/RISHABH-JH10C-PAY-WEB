@@ -3,6 +3,7 @@ import {
   parseStockItemsInput,
   sanitizeDeliveryContentInput,
 } from "@/lib/delivery-content";
+import { normalizeStockMode, toStockNumber } from "@/lib/stock";
 
 /** Parse duration plans, including optional plan-level delivery overrides. */
 export function parseProductPlans(plans) {
@@ -20,16 +21,32 @@ export function parseProductPlans(plans) {
 
     if (!delivery.ok) return { ok: false, error: delivery.error };
 
+    const rawId = String(raw._id || "").trim();
+    const planId = /^[a-f\d]{24}$/i.test(rawId) ? rawId : undefined;
+
     parsed.push({
+      ...(planId ? { _id: planId } : {}),
       label: String(raw.label || "").trim() || autoLabel,
       days,
       price: Math.max(0, Number(raw.price) || 0),
-      stock: raw.stock !== undefined ? Math.max(0, Number(raw.stock) || 0) : 10,
+      // New plans default to unlimited so existing behaviour is unchanged.
+      stockMode: normalizeStockMode(raw.stockMode, "unlimited"),
+      stock: toStockNumber(raw.stock, 10),
+      outOfStock: Boolean(raw.outOfStock),
       ...delivery.value,
     });
   }
 
   return { ok: true, plans: parsed };
+}
+
+/** Parse product-level inventory fields (used when a product has no plans). */
+export function parseProductStockInput(input = {}) {
+  return {
+    stockMode: normalizeStockMode(input.stockMode, "unlimited"),
+    stock: toStockNumber(input.stock, 10),
+    outOfStock: Boolean(input.outOfStock),
+  };
 }
 
 /** Parse product delivery type/content + optional unique stock pool input. */

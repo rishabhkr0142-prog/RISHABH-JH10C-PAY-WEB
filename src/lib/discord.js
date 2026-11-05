@@ -285,6 +285,71 @@ export async function sendOrderDM({ discordId, order }) {
   };
 }
 
+/**
+ * Send an inventory alert to the admin/staff channel using the same bot REST
+ * token. Missing channel configuration is a no-op so orders never fail.
+ *
+ * Env: DISCORD_STOCK_CHANNEL_ID (preferred), DISCORD_ADMIN_CHANNEL_ID or
+ *      DISCORD_LOG_CHANNEL_ID.
+ */
+export async function sendAdminStockAlert({
+  productName,
+  planLabel = "",
+  stock,
+  productId = "",
+  planId = "",
+} = {}) {
+  const channelId = String(
+    process.env.DISCORD_STOCK_CHANNEL_ID ||
+      process.env.DISCORD_ADMIN_CHANNEL_ID ||
+      process.env.DISCORD_LOG_CHANNEL_ID ||
+      ""
+  ).trim();
+
+  if (!channelId || !process.env.DISCORD_BOT_TOKEN) {
+    return { ok: false, skipped: true, reason: "not_configured" };
+  }
+
+  const name = String(productName || "Product").trim();
+  const plan = String(planLabel || "").trim();
+  const left = Math.max(0, Number(stock) || 0);
+  const label = plan ? `${name} (${plan})` : name;
+  const content =
+    left <= 0
+      ? `Out of stock: ${label} - 0 left`
+      : `Low stock: ${label} - ${left} left`;
+
+  const embed = {
+    title: left <= 0 ? "Inventory depleted" : "Low inventory warning",
+    description: content,
+    color: left <= 0 ? 0xef4444 : 0xf59e0b,
+    fields: [
+      ...(productId
+        ? [{ name: "Product ID", value: String(productId), inline: true }]
+        : []),
+      ...(planId
+        ? [{ name: "Plan ID", value: String(planId), inline: true }]
+        : []),
+    ],
+    timestamp: new Date().toISOString(),
+  };
+
+  const message = await discordRequest(`/channels/${channelId}/messages`, {
+    method: "POST",
+    body: {
+      content,
+      embeds: [embed],
+      allowed_mentions: { parse: [] },
+    },
+  });
+
+  return {
+    ok: true,
+    channelId,
+    messageId: message?.id ? String(message.id) : "",
+  };
+}
+
 /** Backward-compatible alias for older imports. */
 export const sendLicenseDM = sendOrderDM;
 

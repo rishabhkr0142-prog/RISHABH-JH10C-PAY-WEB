@@ -5,6 +5,7 @@ import Order from "@/models/Order";
 import { findUserForSession } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
+import { releaseProductStockReservation } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,10 @@ export async function GET(request, { params }) {
     const now = new Date();
     if (order.status === "pending" && order.expiresAt && new Date(order.expiresAt) <= now) {
       await Order.findByIdAndUpdate(orderId, { status: "expired" });
+      await releaseProductStockReservation(order, "order_expired");
       order.status = "expired";
+    } else if (order.status === "cancelled") {
+      await releaseProductStockReservation(order, "order_cancelled");
     }
 
     return NextResponse.json({

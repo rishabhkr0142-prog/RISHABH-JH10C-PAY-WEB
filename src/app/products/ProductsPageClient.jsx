@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
+import { getProductStockInfo, getStockBadge } from "@/lib/stock";
 import ProductImage from "@/components/ProductImage";
 
 export default function ProductsPageClient({ initialProducts = [] }) {
@@ -152,7 +153,9 @@ export default function ProductsPageClient({ initialProducts = [] }) {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence>
               {filteredProducts.map((product, idx) => {
-                const inStock = product.stock === undefined || product.stock > 0;
+                const stockInfo = getProductStockInfo(product);
+                const stockBadge = getStockBadge(stockInfo);
+                const inStock = stockInfo.inStock;
                 const isAvailable =
                   product.active !== false && product.available !== false && inStock;
                 const imageSrc =
@@ -191,17 +194,23 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                       <div className="absolute left-3 top-3">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide backdrop-blur-md border ${
-                            isAvailable
-                              ? "border-emerald-500/30 bg-black/80 text-emerald-300"
-                              : "border-neutral-700 bg-black/80 text-neutral-400"
+                            !isAvailable
+                              ? "border-neutral-700 bg-black/80 text-neutral-400"
+                              : stockBadge.tone === "low"
+                              ? "border-amber-500/40 bg-black/80 text-amber-300"
+                              : "border-emerald-500/30 bg-black/80 text-emerald-300"
                           }`}
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              isAvailable ? "bg-emerald-400" : "bg-neutral-500"
+                              !isAvailable
+                                ? "bg-neutral-500"
+                                : stockBadge.tone === "low"
+                                ? "bg-amber-400"
+                                : "bg-emerald-400"
                             }`}
                           />
-                          {isAvailable ? "In Stock" : "Out of Stock"}
+                          {isAvailable ? stockBadge.label : "Out of Stock"}
                         </span>
                       </div>
 

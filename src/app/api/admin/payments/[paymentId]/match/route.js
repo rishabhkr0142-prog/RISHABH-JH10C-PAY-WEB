@@ -7,6 +7,7 @@ import Order from "@/models/Order";
 import { markOrderBuyerAsClient } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { completeOrder } from "@/lib/fulfillment";
+import { ensureStockForPayment } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,20 @@ export async function POST(request, { params }) {
           )}, but the order total is ₹${(orderPaise / 100).toFixed(2)}.`,
         },
         { status: 400 }
+      );
+    }
+
+    // Confirm/re-acquire inventory before linking the payment.
+    const stockCheck = await ensureStockForPayment(order);
+    if (!stockCheck.ok) {
+      return NextResponse.json(
+        {
+          error:
+            stockCheck.reason === "out_of_stock"
+              ? "This product is out of stock, so the order cannot be fulfilled. Restock it first."
+              : "Inventory could not be reserved for this order.",
+        },
+        { status: 409 }
       );
     }
 

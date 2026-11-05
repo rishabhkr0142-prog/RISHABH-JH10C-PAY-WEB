@@ -18,7 +18,12 @@ import {
   normalizeDeliveryType,
   resolveDeliveryContent,
 } from "@/lib/delivery-content";
-import { countAvailableStockItems } from "@/lib/product-stock";
+import {
+  countAvailableStockItems,
+  releaseStockReservationSnapshot,
+  reserveStock,
+  STOCK_RESERVATION_TTL_MS,
+} from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -64,13 +69,6 @@ export async function POST(request) {
       return NextResponse.json(
         { error: "Product is not available for purchase." },
         { status: 404 }
-      );
-    }
-
-    if (!product.useStockItems && product.stock !== undefined && product.stock <= 0) {
-      return NextResponse.json(
-        { error: "Product is currently out of stock." },
-        { status: 400 }
       );
     }
 
@@ -364,32 +362,76 @@ export async function POST(request) {
       }
     }
 
-    // 6. Create the pending order with 10-minute expiration & integer amountPaise
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    const order = await Order.create({
-      userId: accountUserId,
-      user: userDoc._id,
-      productId: product._id,
-      product: product._id,
-      planId: resolvedPlanId,
-      amountPaise: totalAmountPaise,
-      price: totalPrice,
-      amount: totalPrice,
-      originalPrice: basePrice,
-      couponCode: appliedCoupon?.code || "",
-      couponDiscount: couponDiscount,
-      status: "pending",
-      expiresAt,
-      productName: product.name,
-      productKey,
-      deliveryType,
-      customerName: session.user.name || userDoc.username || "Customer",
-      email: session.user.email || userDoc.email || "",
-      discordId,
+    // 6. Reserve inventory atomically BEFORE creating the order. Limited
+    //    products fail here with "Out of Stock" instead of overselling.
+    const orderId = new Order()._id;
+    const reservation = await reserveStock({
+      product,
+      plan: selectedPlanDoc,
       quantity: qty,
-      notes: String(notes || "").trim(),
-      ...(selectedPlanData ? { plan: selectedPlanData } : {}),
+      orderId,
+      planLabel: selectedPlanData?.label || "",
     });
+
+    if (!reservation.ok) {
+      return NextResponse.json(
+        {
+          error:
+            reservation.reason === "out_of_stock"
+              ? "Product is currently out of stock."
+              : "This product cannot be ordered right now. Please contact support.",
+        },
+        { status: reservation.reason === "out_of_stock" ? 400 : 409 }
+      );
+    }
+
+    // 7. Create the pending order with 10-minute expiration & integer amountPaise
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    let order;
+
+    try {
+      order = await Order.create({
+        _id: orderId,
+        userId: accountUserId,
+        user: userDoc._id,
+        productId: product._id,
+        product: product._id,
+        planId: resolvedPlanId,
+        amountPaise: totalAmountPaise,
+        price: totalPrice,
+        amount: totalPrice,
+        originalPrice: basePrice,
+        couponCode: appliedCoupon?.code || "",
+        couponDiscount: couponDiscount,
+        status: "pending",
+        expiresAt,
+        productName: product.name,
+        productKey,
+        deliveryType,
+        customerName: session.user.name || userDoc.username || "Customer",
+        email: session.user.email || userDoc.email || "",
+        discordId,
+        quantity: qty,
+        stockReserved: Boolean(reservation.reserved),
+        stockCommitted: false,
+        stockReleased: false,
+        stockReservation: reservation.snapshot,
+        stockReservationExpiresAt: reservation.reserved
+          ? new Date(Date.now() + STOCK_RESERVATION_TTL_MS)
+          : null,
+        notes: String(notes || "").trim(),
+        ...(selectedPlanData ? { plan: selectedPlanData } : {}),
+      });
+    } catch (createErr) {
+      if (reservation.reserved) {
+        await releaseStockReservationSnapshot(
+          reservation.snapshot,
+          orderId,
+          "order_create_failed"
+        );
+      }
+      throw createErr;
+    }
 
     // 7. Generate UPI payment intent link
     const formattedAmount = (totalAmountPaise / 100).toFixed(2);

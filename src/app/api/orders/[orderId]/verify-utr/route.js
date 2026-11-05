@@ -12,6 +12,10 @@ import { rateLimit } from "@/lib/rate-limit";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 import { completeOrder } from "@/lib/fulfillment";
+import {
+  ensureStockForPayment,
+  releaseProductStockReservation,
+} from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +97,7 @@ export async function POST(request, { params }) {
 
     // If order was cancelled
     if (order.status === "cancelled") {
+      await releaseProductStockReservation(order, "order_cancelled");
       return NextResponse.json(
         { error: "This order has been cancelled and cannot be verified." },
         { status: 400 }
@@ -153,6 +158,7 @@ export async function POST(request, { params }) {
         if (order.status !== "expired") {
           await Order.findByIdAndUpdate(order._id, { status: "expired" });
         }
+        await releaseProductStockReservation(order, "order_expired");
         return NextResponse.json(
           {
             error:
@@ -202,7 +208,21 @@ export async function POST(request, { params }) {
       );
     }
 
-    // 7. Atomically link order and payment
+    // 7. Confirm (or re-acquire) inventory before accepting the payment.
+    const stockCheck = await ensureStockForPayment(order);
+    if (!stockCheck.ok) {
+      return NextResponse.json(
+        {
+          error:
+            stockCheck.reason === "out_of_stock"
+              ? "This product is out of stock. Please contact support for help with your payment."
+              : "Inventory could not be reserved for this order. Please contact support.",
+        },
+        { status: 409 }
+      );
+    }
+
+    // 8. Atomically link order and payment
     const claimedPayment = await Payment.findOneAndUpdate(
       { _id: payment._id, status: "unclaimed" },
       {

@@ -242,12 +242,14 @@ export function stripProductDeliveryFields(product) {
   delete safe.useStockItems;
   delete safe.stockItems;
   delete safe.stockItemCount;
+  delete safe.reserved;
 
   if (Array.isArray(safe.plans)) {
     safe.plans = safe.plans.map((plan) => {
       if (!plan || typeof plan !== "object") return plan;
       const copy = { ...plan };
       for (const field of DELIVERY_FIELDS) delete copy[field];
+      delete copy.reserved;
       return copy;
     });
   }

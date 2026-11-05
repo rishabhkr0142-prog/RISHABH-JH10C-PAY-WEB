@@ -5,7 +5,11 @@ import connectDB from "@/lib/db";
 import Order, { ORDER_STATUSES } from "@/models/Order";
 import { decrementStat } from "@/lib/stats";
 import { completeOrder } from "@/lib/fulfillment";
-import { releaseProductStockItem } from "@/lib/product-stock";
+import {
+  ensureStockForPayment,
+  releaseProductStockItem,
+  releaseProductStockReservation,
+} from "@/lib/product-stock";
 import { normalizeDeliveryType } from "@/lib/delivery-content";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +77,21 @@ export async function PATCH(request, { params }) {
       );
     }
 
+    if (body.status === "paid" && current.status !== "paid") {
+      const stockCheck = await ensureStockForPayment(current);
+      if (!stockCheck.ok) {
+        return NextResponse.json(
+          {
+            error:
+              stockCheck.reason === "out_of_stock"
+                ? "This product is out of stock. Restock it before marking the order paid."
+                : "Inventory could not be reserved for this order.",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const updates = { status: body.status };
     if (body.status === "paid" && !current.paidAt) {
       updates.paidAt = new Date();
@@ -86,6 +105,10 @@ export async function PATCH(request, { params }) {
 
     if (!order) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    if (body.status === "cancelled" || body.status === "expired") {
+      await releaseProductStockReservation(order, `order_${body.status}`);
     }
 
     // Marking an order as paid triggers automatic delivery.
@@ -130,6 +153,13 @@ export async function DELETE(request, { params }) {
     if (!id || !/^[a-f\d]{24}$/i.test(id)) {
       return NextResponse.json({ error: "Invalid order id." }, { status: 400 });
     }
+
+    const current = await Order.findById(id).lean();
+    if (!current) {
+      return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    await releaseProductStockReservation(current, "order_deleted");
 
     const deleted = await Order.findByIdAndDelete(id).lean();
     if (!deleted) {

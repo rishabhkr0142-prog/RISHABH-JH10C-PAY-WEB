@@ -24,6 +24,18 @@ const DeliveryContentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const StockReservationSchema = new mongoose.Schema(
+  {
+    productId: { type: String, default: "" },
+    mode: { type: String, default: "unlimited" },
+    scope: { type: String, default: "product" },
+    planId: { type: String, default: "" },
+    planLabel: { type: String, default: "" },
+    quantity: { type: Number, default: 1, min: 1 },
+  },
+  { _id: false }
+);
+
 const OrderSchema = new mongoose.Schema(
   {
     // Buyer account id (Mongo User._id for new orders, legacy Discord ID for old ones)
@@ -142,6 +154,18 @@ const OrderSchema = new mongoose.Schema(
       default: undefined,
     },
     quantity: { type: Number, default: 1, min: 1 },
+    // Stock reservation lifecycle. A unit is reserved while the order is
+    // waiting for payment, then committed after the payment is verified.
+    // Released units are returned exactly once (flags make this idempotent).
+    stockReserved: { type: Boolean, default: false, index: true },
+    stockCommitted: { type: Boolean, default: false, index: true },
+    stockReleased: { type: Boolean, default: false },
+    stockReservation: {
+      type: StockReservationSchema,
+      default: undefined,
+    },
+    stockReservationExpiresAt: { type: Date, default: null, index: true },
+    stockError: { type: String, default: "" },
     notes: { type: String, default: "" },
     // License delivery (one order = one key, generated server-side only)
     licenseKey: { type: String },

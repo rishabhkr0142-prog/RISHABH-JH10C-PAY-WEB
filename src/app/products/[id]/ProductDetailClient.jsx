@@ -8,6 +8,11 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
 import { calculateDiscount } from "@/lib/offer-utils";
+import {
+  getPlanStockInfo,
+  getStockBadge,
+  pickDefaultPlan,
+} from "@/lib/stock";
 import { DiscordIcon } from "@/components/Navbar";
 
 export default function ProductDetailClient({ product, initialCouponCode = "" }) {
@@ -27,16 +32,13 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
 
   // Duration Pricing Plans (Nitro style)
   const hasPlans = Array.isArray(product.plans) && product.plans.length > 0;
-  // Default to lowest price plan if plans exist
-  const lowestPricePlan = hasPlans
-    ? product.plans.reduce(
-        (min, p) => (Number(p.price) < Number(min.price) ? p : min),
-        product.plans[0]
-      )
-    : null;
+  // Default to the cheapest plan that is currently purchasable.
+  const defaultPlan = pickDefaultPlan(product);
 
-  const [selectedPlan, setSelectedPlan] = useState(lowestPricePlan);
+  const [selectedPlan, setSelectedPlan] = useState(defaultPlan);
   const currentPrice = selectedPlan ? Number(selectedPlan.price) : Number(product.price);
+  const selectedStockInfo = getPlanStockInfo(product, selectedPlan);
+  const stockBadge = getStockBadge(selectedStockInfo);
 
   const [couponInput, setCouponInput] = useState(initialCouponCode || "");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -52,8 +54,10 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
   const [orderModal, setOrderModal] = useState(null);
 
   const isContent = product.deliveryType === "content";
-  const inStock = product.stock === undefined || product.stock > 0;
-  const isAvailable = product.active !== false && product.available !== false && inStock;
+  const isAvailable =
+    product.active !== false &&
+    product.available !== false &&
+    selectedStockInfo.inStock;
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -298,17 +302,23 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
             <div className="absolute left-3 top-3">
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium backdrop-blur-md border ${
-                  isAvailable
-                    ? "border-emerald-500/30 bg-black/80 text-emerald-300"
-                    : "border-neutral-700 bg-black/80 text-neutral-400"
+                  !isAvailable
+                    ? "border-neutral-700 bg-black/80 text-neutral-400"
+                    : stockBadge.tone === "low"
+                    ? "border-amber-500/40 bg-black/80 text-amber-300"
+                    : "border-emerald-500/30 bg-black/80 text-emerald-300"
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
-                    isAvailable ? "bg-emerald-400" : "bg-neutral-500"
+                    !isAvailable
+                      ? "bg-neutral-500"
+                      : stockBadge.tone === "low"
+                      ? "bg-amber-400"
+                      : "bg-emerald-400"
                   }`}
                 />
-                {isAvailable ? "In Stock & Verified" : "Out of Stock"}
+                {isAvailable ? stockBadge.label : "Out of Stock"}
               </span>
             </div>
           </div>
@@ -390,6 +400,14 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
               Coupon {appliedCoupon.code} applied — you save {formatPrice(couponDiscount)}
             </p>
           )}
+          {selectedStockInfo.inStock &&
+            selectedStockInfo.limited &&
+            selectedStockInfo.stock !== null &&
+            selectedStockInfo.stock <= 5 && (
+              <p className="mt-1 text-[11px] font-semibold text-amber-400">
+                Only {selectedStockInfo.stock} left for this plan. Order soon.
+              </p>
+            )}
 
           {/* Nitro-Style Selectable Duration Plans */}
           {hasPlans && (
@@ -411,14 +429,22 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                   const isLifetime =
                     Number(plan.days) === 0 ||
                     String(plan.label).toLowerCase().includes("lifetime");
+                  const planStock = getPlanStockInfo(product, plan);
+                  const planBadge = getStockBadge(planStock);
+                  const planDisabled = !planStock.inStock;
 
                   return (
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setSelectedPlan(plan)}
+                      disabled={planDisabled}
+                      onClick={() => {
+                        if (!planDisabled) setSelectedPlan(plan);
+                      }}
                       className={`relative flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all ${
-                        isSelected
+                        planDisabled
+                          ? "cursor-not-allowed border-neutral-800 bg-black/20 opacity-60"
+                          : isSelected
                           ? "border-white bg-white/10 shadow-lg ring-1 ring-white/30"
                           : "border-theme-border bg-black/40 hover:border-theme-border-hover hover:bg-white/5"
                       }`}
@@ -450,6 +476,19 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                             ? "Unlimited duration access"
                             : `${plan.days} Days validity`}
                         </p>
+                        {planStock.limited && (
+                          <p
+                            className={`mt-1 text-[10px] font-semibold ${
+                              planDisabled
+                                ? "text-red-400"
+                                : planBadge.tone === "low"
+                                ? "text-amber-400"
+                                : "text-emerald-400"
+                            }`}
+                          >
+                            {planBadge.label}
+                          </p>
+                        )}
                       </div>
 
                       <div className="mt-3 border-t border-white/5 pt-2">

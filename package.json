@@ -11,7 +11,8 @@
     "build": "next build",
     "start": "next start",
     "seed": "node scripts/seed.js",
-    "check:images": "node scripts/check-product-images.js"
+    "check:images": "node scripts/check-product-images.js",
+    "migrate:stock": "node scripts/migrate-stock-unlimited.js"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",

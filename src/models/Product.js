@@ -40,6 +40,14 @@ const ProductSchema = new mongoose.Schema(
     },
     description: { type: String, default: "" },
     price: { type: Number, required: true, min: 0, default: 0 },
+    // Inventory mode for products without plans. Existing products stay
+    // "unlimited" so old stock numbers never block new orders.
+    stockMode: {
+      type: String,
+      enum: ["unlimited", "limited"],
+      default: "unlimited",
+      index: true,
+    },
     // Nitro-style duration pricing plans (e.g., 7 Days, 30 Days, Lifetime)
     plans: {
       type: [
@@ -47,7 +55,16 @@ const ProductSchema = new mongoose.Schema(
           label: { type: String, trim: true, default: "" },
           days: { type: Number, default: 0, min: 0 }, // 0 = Lifetime
           price: { type: Number, required: true, min: 0, default: 0 },
+          // Per-plan inventory. Old plans without a mode are treated as
+          // unlimited by the application and by the migration script.
+          stockMode: {
+            type: String,
+            enum: ["unlimited", "limited"],
+            default: "unlimited",
+          },
           stock: { type: Number, default: 10, min: 0 },
+          reserved: { type: Number, default: 0, min: 0 },
+          outOfStock: { type: Boolean, default: false },
           deliveryTitle: { type: String, default: "", trim: true, maxlength: 200 },
           deliveryLink: { type: String, default: "", trim: true, maxlength: 2000 },
           deliveryMessage: { type: String, default: "", maxlength: 5000 },
@@ -73,6 +90,10 @@ const ProductSchema = new mongoose.Schema(
       default: [],
     },
     stock: { type: Number, default: 10, min: 0 },
+    // Units currently held by unpaid orders (only meaningful in limited mode).
+    reserved: { type: Number, default: 0, min: 0 },
+    // Manual kill-switch that works even for unlimited products.
+    outOfStock: { type: Boolean, default: false, index: true },
     active: { type: Boolean, default: true, index: true },
     // Backward-compatible available flag (synced with active)
     available: { type: Boolean, default: true },

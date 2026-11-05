@@ -3,7 +3,10 @@ import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { toPlainText } from "@/lib/serialize";
 import { stripProductDeliveryFields } from "@/lib/delivery-content";
-import { attachStockAvailability } from "@/lib/product-stock";
+import {
+  attachStockAvailability,
+  maybeReleaseExpiredStockReservations,
+} from "@/lib/product-stock";
 import ProductDetailClient from "./ProductDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +38,7 @@ export default async function ProductDetailPage({ params, searchParams }) {
 
   try {
     await connectDB();
+    await maybeReleaseExpiredStockReservations();
     const isObjectId = /^[a-f\d]{24}$/i.test(id);
     const doc = await Product.findOne(
       isObjectId ? { $or: [{ _id: id }, { slug: id }] } : { slug: id }

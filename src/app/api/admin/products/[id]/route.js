@@ -9,7 +9,12 @@ import {
   parseProductDeliveryInput,
   parseProductPlans,
 } from "@/lib/product-input";
-import { replaceUnclaimedStockItems } from "@/lib/product-stock";
+import {
+  maybeNotifyLowStock,
+  recordStockLog,
+  replaceUnclaimedStockItems,
+} from "@/lib/product-stock";
+import { normalizeStockMode } from "@/lib/stock";
 import ProductStockItem from "@/models/ProductStockItem";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +26,11 @@ function slugify(text) {
     .replace(/[^\w\s-]/g, "")
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function alertThresholdValue() {
+  const value = Number(process.env.LOW_STOCK_ALERT_THRESHOLD);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 3;
 }
 
 /**
@@ -43,7 +53,11 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
     }
 
+    const adminId = guard.session?.user?.id || "";
     const updates = {};
+    let productStockChange = null;
+    let productOutOfStockChange = null;
+    const planChanges = [];
     const touchesDelivery =
       body?.deliveryType !== undefined ||
       body?.productKey !== undefined ||
@@ -154,8 +168,43 @@ export async function PUT(request, { params }) {
       updates.price = numericPrice;
     }
 
-    if (body?.stock !== undefined) {
-      updates.stock = Math.max(0, Number(body.stock) || 0);
+    if (
+      body?.stockMode !== undefined ||
+      body?.stock !== undefined ||
+      body?.outOfStock !== undefined
+    ) {
+      const beforeMode = normalizeStockMode(current.stockMode, "unlimited");
+      const beforeStock = Math.max(0, Number(current.stock) || 0);
+      const beforeOut = Boolean(current.outOfStock);
+
+      const afterMode =
+        body?.stockMode !== undefined
+          ? normalizeStockMode(body.stockMode, "unlimited")
+          : beforeMode;
+      const afterStock =
+        body?.stock !== undefined
+          ? Math.max(0, Number(body.stock) || 0)
+          : beforeStock;
+      const afterOut =
+        body?.outOfStock !== undefined
+          ? Boolean(body.outOfStock)
+          : beforeOut;
+
+      updates.stockMode = afterMode;
+      updates.stock = afterStock;
+      updates.outOfStock = afterOut;
+
+      if (beforeStock !== afterStock || beforeMode !== afterMode) {
+        productStockChange = {
+          before: beforeStock,
+          after: afterStock,
+          beforeMode,
+          afterMode,
+        };
+      }
+      if (beforeOut !== afterOut) {
+        productOutOfStockChange = { before: beforeOut, after: afterOut };
+      }
     }
 
     if (body?.imageUrl !== undefined) {
@@ -212,7 +261,69 @@ export async function PUT(request, { params }) {
       if (!parsedPlans.ok) {
         return NextResponse.json({ error: parsedPlans.error }, { status: 400 });
       }
-      updates.plans = parsedPlans.plans;
+
+      const currentPlans = Array.isArray(current.plans) ? current.plans : [];
+      const mergedPlans = parsedPlans.plans.map((plan) => {
+        let match = plan._id
+          ? currentPlans.find((item) => String(item._id) === String(plan._id))
+          : null;
+        if (!match) {
+          match = currentPlans.find(
+            (item) =>
+              String(item.label || "").trim() ===
+                String(plan.label || "").trim() &&
+              Number(item.days) === Number(plan.days)
+          );
+        }
+
+        const beforeStock = Math.max(0, Number(match?.stock) || 0);
+        const beforeMode = normalizeStockMode(
+          match?.stockMode,
+          current.stockMode
+        );
+        const beforeOut = Boolean(match?.outOfStock);
+
+        if (
+          match &&
+          (beforeStock !== plan.stock ||
+            beforeMode !== plan.stockMode ||
+            beforeOut !== Boolean(plan.outOfStock))
+        ) {
+          planChanges.push({
+            planId: String(match._id || ""),
+            planLabel: plan.label,
+            beforeStock,
+            afterStock: plan.stock,
+            beforeMode,
+            afterMode: plan.stockMode,
+            beforeOut,
+            afterOut: Boolean(plan.outOfStock),
+            isNew: false,
+          });
+        } else if (!match && plan.stockMode === "limited" && plan.stock > 0) {
+          planChanges.push({
+            planId: "",
+            planLabel: plan.label,
+            beforeStock: 0,
+            afterStock: plan.stock,
+            beforeMode: "unlimited",
+            afterMode: plan.stockMode,
+            beforeOut: false,
+            afterOut: Boolean(plan.outOfStock),
+            isNew: true,
+          });
+        }
+
+        return {
+          ...plan,
+          ...(plan._id || match?._id
+            ? { _id: plan._id || String(match._id) }
+            : {}),
+          reserved: match ? Math.max(0, Number(match.reserved) || 0) : 0,
+        };
+      });
+
+      updates.plans = mergedPlans;
     }
 
     if (body?.active !== undefined) {
@@ -230,6 +341,115 @@ export async function PUT(request, { params }) {
 
     if (!product) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    }
+
+    if (productStockChange) {
+      const stockChanged = productStockChange.before !== productStockChange.after;
+      await recordStockLog({
+        productId: product._id,
+        productName: product.name,
+        scope: "product",
+        action: stockChanged ? "admin_adjust" : "stock_mode_change",
+        quantity: Math.abs(productStockChange.after - productStockChange.before),
+        delta: productStockChange.after - productStockChange.before,
+        stockBefore: productStockChange.before,
+        stockAfter: productStockChange.after,
+        reservedAfter: Math.max(0, Number(product.reserved) || 0),
+        adminId,
+        note: `Admin set stock mode ${productStockChange.beforeMode} -> ${productStockChange.afterMode}`,
+      });
+
+      if (
+        productStockChange.afterMode === "limited" &&
+        productStockChange.after <= alertThresholdValue() &&
+        (productStockChange.after === 0 ||
+          productStockChange.before > alertThresholdValue() ||
+          productStockChange.beforeMode !== "limited")
+      ) {
+        await maybeNotifyLowStock({
+          product,
+          stockBefore: productStockChange.before,
+          stockAfter: productStockChange.after,
+        });
+      }
+    }
+
+    if (productOutOfStockChange) {
+      await recordStockLog({
+        productId: product._id,
+        productName: product.name,
+        scope: "product",
+        action: productOutOfStockChange.after
+          ? "out_of_stock_on"
+          : "out_of_stock_off",
+        delta: 0,
+        reservedAfter: Math.max(0, Number(product.reserved) || 0),
+        adminId,
+        note: "Admin changed product out-of-stock switch",
+      });
+    }
+
+    for (const change of planChanges) {
+      const updatedPlan =
+        (change.planId &&
+          (product.plans || []).find(
+            (plan) => String(plan._id) === String(change.planId)
+          )) ||
+        (product.plans || []).find(
+          (plan) =>
+            String(plan.label || "").trim() ===
+            String(change.planLabel || "").trim()
+        );
+
+      const stockChanged = change.beforeStock !== change.afterStock;
+      if (stockChanged || change.beforeMode !== change.afterMode) {
+        await recordStockLog({
+          productId: product._id,
+          productName: product.name,
+          planId: String(updatedPlan?._id || change.planId || ""),
+          planLabel: change.planLabel,
+          scope: "plan",
+          action: stockChanged ? "admin_adjust" : "stock_mode_change",
+          quantity: Math.abs(change.afterStock - change.beforeStock),
+          delta: change.afterStock - change.beforeStock,
+          stockBefore: change.beforeStock,
+          stockAfter: change.afterStock,
+          reservedAfter: Math.max(0, Number(updatedPlan?.reserved) || 0),
+          adminId,
+          note: `Admin set plan stock mode ${change.beforeMode} -> ${change.afterMode}`,
+        });
+
+        if (
+          change.afterMode === "limited" &&
+          change.afterStock <= alertThresholdValue() &&
+          (change.afterStock === 0 ||
+            change.beforeStock > alertThresholdValue() ||
+            change.beforeMode !== "limited")
+        ) {
+          await maybeNotifyLowStock({
+            product,
+            plan: updatedPlan || { label: change.planLabel },
+            planLabel: change.planLabel,
+            stockBefore: change.beforeStock,
+            stockAfter: change.afterStock,
+          });
+        }
+      }
+
+      if (change.beforeOut !== change.afterOut) {
+        await recordStockLog({
+          productId: product._id,
+          productName: product.name,
+          planId: String(updatedPlan?._id || change.planId || ""),
+          planLabel: change.planLabel,
+          scope: "plan",
+          action: change.afterOut ? "out_of_stock_on" : "out_of_stock_off",
+          delta: 0,
+          reservedAfter: Math.max(0, Number(updatedPlan?.reserved) || 0),
+          adminId,
+          note: "Admin changed plan out-of-stock switch",
+        });
+      }
     }
 
     if (body?.stockItems !== undefined || body?.stockItemsText !== undefined) {

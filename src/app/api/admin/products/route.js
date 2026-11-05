@@ -8,8 +8,12 @@ import { normalizeImageUrl } from "@/lib/image-url";
 import {
   parseProductDeliveryInput,
   parseProductPlans,
+  parseProductStockInput,
 } from "@/lib/product-input";
-import { replaceUnclaimedStockItems } from "@/lib/product-stock";
+import {
+  recordStockLog,
+  replaceUnclaimedStockItems,
+} from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +46,6 @@ export async function POST(request) {
       imageUrl = "",
       images = [],
       features = [],
-      stock = 10,
       plans = [],
     } = body || {};
 
@@ -132,6 +135,8 @@ export async function POST(request) {
       return NextResponse.json({ error: parsedPlans.error }, { status: 400 });
     }
 
+    const stockFields = parseProductStockInput(body);
+
     const product = await Product.create({
       name: String(name).trim(),
       productKey,
@@ -146,13 +151,31 @@ export async function POST(request) {
       images: parsedImages,
       imageUrl: mainImageUrl,
       features: parsedFeatures,
-      stock: Math.max(0, Number(stock) || 0),
+      stock: stockFields.stock,
+      stockMode: stockFields.stockMode,
+      outOfStock: stockFields.outOfStock,
+      reserved: 0,
       active,
       available: active,
     });
 
     if (delivery.useStockItems) {
       await replaceUnclaimedStockItems(product._id, delivery.stockItems);
+    }
+
+    if (stockFields.stockMode === "limited") {
+      await recordStockLog({
+        productId: product._id,
+        productName: product.name,
+        scope: "product",
+        action: "admin_adjust",
+        quantity: stockFields.stock,
+        delta: stockFields.stock,
+        stockBefore: 0,
+        stockAfter: stockFields.stock,
+        adminId: guard.session?.user?.id || "",
+        note: "Initial limited stock on product creation",
+      });
     }
 
     revalidatePath("/");

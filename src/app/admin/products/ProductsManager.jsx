@@ -7,6 +7,11 @@ import ProductForm from "./ProductForm";
 import ProductImage from "@/components/ProductImage";
 import { formatPrice } from "@/lib/format";
 import { PRODUCT_LABELS, normalizeProductKey } from "@/lib/product-keys";
+import {
+  getPlanStockInfo,
+  getProductStockInfo,
+  getStockBadge,
+} from "@/lib/stock";
 
 export default function ProductsManager({ products = [] }) {
   const router = useRouter();
@@ -172,6 +177,9 @@ export default function ProductsManager({ products = [] }) {
                   const isBusy = busyId === p._id;
                   const imageSrc =
                     p.imageUrl || (p.images && p.images[0]) || null;
+                  const stockInfo = getProductStockInfo(p);
+                  const stockBadge = getStockBadge(stockInfo);
+                  const plans = Array.isArray(p.plans) ? p.plans : [];
 
                   return (
                     <tr key={p._id} className="transition hover:bg-white/5">
@@ -228,14 +236,55 @@ export default function ProductsManager({ products = [] }) {
                         )}
                       </td>
                       <td className="p-4 font-mono text-neutral-300">
-                        {p.useStockItems
-                          ? p.stockItemCount ?? 0
-                          : p.stock !== undefined
-                          ? p.stock
-                          : "∞"}
-                        {p.useStockItems && (
-                          <span className="ml-1 text-[10px] text-neutral-500">
-                            items
+                        {plans.length > 0 ? (
+                          <div className="space-y-1">
+                            {plans.map((plan, planIdx) => {
+                              const planInfo = getPlanStockInfo(p, plan);
+                              return (
+                                <div
+                                  key={plan._id || planIdx}
+                                  className="flex items-center justify-between gap-3 text-[10px]"
+                                >
+                                  <span className="text-neutral-400">
+                                    {plan.label || `${plan.days} Days`}
+                                  </span>
+                                  <span
+                                    className={
+                                      !planInfo.inStock
+                                        ? "text-red-400"
+                                        : planInfo.limited
+                                        ? "text-white"
+                                        : "text-emerald-400"
+                                    }
+                                  >
+                                    {planInfo.limited
+                                      ? `${planInfo.stock} (${planInfo.reserved} reserved)`
+                                      : "Unlimited"}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {p.useStockItems && (
+                              <span className="block text-[9px] text-neutral-500">
+                                {p.stockItemCount ?? 0} pool items
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            {stockInfo.limited
+                              ? `${stockInfo.stock} (${stockInfo.reserved} reserved)`
+                              : "Unlimited"}
+                            {p.useStockItems && (
+                              <span className="ml-1 text-[10px] text-neutral-500">
+                                / {p.stockItemCount ?? 0} items
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {!stockInfo.inStock && (
+                          <span className="mt-1 block text-[10px] font-semibold text-red-400">
+                            {stockBadge.label}
                           </span>
                         )}
                       </td>

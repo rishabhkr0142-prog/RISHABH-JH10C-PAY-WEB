@@ -7,6 +7,7 @@ import Order from "@/models/Order";
 import Client from "@/models/Client";
 import { markOrderBuyerAsClient } from "@/lib/account";
 import { completeOrder } from "@/lib/fulfillment";
+import { ensureStockForPayment } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,22 @@ export async function POST(request) {
 
     if (candidateOrders.length === 1) {
       const targetOrder = candidateOrders[0];
+
+      // Reserve/confirm inventory before accepting the payment. If the unit
+      // was released after expiry and none is left, leave the payment for
+      // manual admin review instead of overselling.
+      const stockCheck = await ensureStockForPayment(targetOrder);
+      if (!stockCheck.ok) {
+        return NextResponse.json({
+          ok: true,
+          matched: false,
+          outOfStock: true,
+          orderId: String(targetOrder._id),
+          paymentId: paymentDoc._id,
+          message:
+            "Matching order found but inventory could not be reserved. Payment left unclaimed for admin review.",
+        });
+      }
 
       // Atomically claim the payment
       const claimedPayment = await Payment.findOneAndUpdate(

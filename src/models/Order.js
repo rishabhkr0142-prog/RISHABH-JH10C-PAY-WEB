@@ -93,10 +93,10 @@ const OrderSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
-    // Payment window expiration (defaults to 10 minutes from creation)
+    // Payment window expiration (defaults to 15 minutes from creation)
     expiresAt: {
       type: Date,
-      default: () => new Date(Date.now() + 10 * 60 * 1000),
+      default: () => new Date(Date.now() + 15 * 60 * 1000),
       index: true,
     },
     // Verified 12-digit UPI UTR reference

@@ -420,8 +420,8 @@ export async function createOrder({
       );
     }
 
-    // 7. Create the pending order with 10-minute expiration & integer amountPaise
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    // 7. Create the pending order with 15-minute expiration & integer amountPaise
+    const expiresAt = new Date(Date.now() + STOCK_RESERVATION_TTL_MS);
     let order;
 
     try {

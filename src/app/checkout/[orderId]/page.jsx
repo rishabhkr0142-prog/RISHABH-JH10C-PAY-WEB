@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import QRCode from "qrcode";
 import { getSession } from "@/lib/session";
 import connectDB from "@/lib/db";
 import Order from "@/models/Order";
@@ -7,6 +6,7 @@ import { findUserForSession } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 import { releaseProductStockReservation } from "@/lib/product-stock";
+import { generateBrandedQrCode } from "@/lib/qr";
 import CheckoutClient from "./CheckoutClient";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +40,6 @@ export default async function OrderCheckoutPage({ params }) {
   }
 
   const isOwner = isOrderOwner(order, session, userDocLean);
-
   const isAdmin = Boolean(session.user.isAdmin);
 
   if (!isOwner && !isAdmin) {
@@ -72,42 +71,62 @@ export default async function OrderCheckoutPage({ params }) {
     await releaseProductStockReservation(order, "order_cancelled");
   }
 
-  // Read UPI Gateway configuration on server ONLY
-  const upiId = process.env.FAMPAY_UPI_ID || process.env.UPI_ID || "rishabh04@fam";
+  // Read UPI Gateway configuration on server ONLY (never expose secrets)
+  const upiId =
+    process.env.FAMPAY_UPI_ID || process.env.UPI_ID || "rishabh04@fam";
   const upiName = process.env.UPI_NAME || "RISHABH JH10C PAY";
-  const orderPaise = order.amountPaise || Math.round((Number(order.price) || 0) * 100);
+  const orderPaise =
+    order.amountPaise || Math.round((Number(order.price) || 0) * 100);
   const formattedAmount = (orderPaise / 100).toFixed(2);
 
-  // Generate UPI Payment URI
-  // Format: upi://pay?pa=FAMPAY_UPI_ID&pn=RISHABH JH10C PAY&am=AMOUNT&cu=INR&tn=ORDER_ID
-  const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(String(order._id))}`;
+  // Exact UPI parameters (URL-encoded)
+  const queryParams = new URLSearchParams({
+    pa: upiId,
+    pn: upiName,
+    am: formattedAmount,
+    cu: "INR",
+    tn: String(order._id),
+    tr: String(order._id),
+  }).toString();
 
-  // Generate Base64 QR code image on the server using qrcode (no external API)
+  // App-specific and generic URI schemes
+  const upiLinks = {
+    generic: `upi://pay?${queryParams}`,
+    phonepe: {
+      intent: `intent://upi/pay?${queryParams}#Intent;scheme=upi;package=com.phonepe.app;end`,
+      ios: `phonepe://pay?${queryParams}`,
+    },
+    gpay: {
+      intent: `intent://upi/pay?${queryParams}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`,
+      ios: `tez://upi/pay?${queryParams}`,
+    },
+    paytm: {
+      intent: `intent://pay?${queryParams}#Intent;scheme=upi;package=net.one97.paytm;end`,
+      ios: `paytmmp://pay?${queryParams}`,
+    },
+  };
+
+  // Generate high-resolution branded QR code image on the server
   let qrCodeDataUrl = "";
   if (order.status === "pending") {
-    try {
-      qrCodeDataUrl = await QRCode.toDataURL(upiLink, {
-        width: 320,
-        margin: 2,
-        color: {
-          dark: "#000000",
-          light: "#ffffff",
-        },
-      });
-    } catch (qrErr) {
-      console.error("Failed to generate QR code:", qrErr);
-    }
+    qrCodeDataUrl = await generateBrandedQrCode(upiLinks.generic, { size: 600 });
   }
 
-  const serializedOrder = redactOrderLicense(toPlainText(order), session, userDocLean);
+  const serializedOrder = redactOrderLicense(
+    toPlainText(order),
+    session,
+    userDocLean
+  );
 
   return (
     <CheckoutClient
       initialOrder={serializedOrder}
       qrCodeDataUrl={qrCodeDataUrl}
-      upiLink={upiLink}
+      upiLink={upiLinks.generic}
+      upiLinks={upiLinks}
       upiId={upiId}
+      upiName={upiName}
+      formattedAmount={formattedAmount}
     />
   );
 }
-

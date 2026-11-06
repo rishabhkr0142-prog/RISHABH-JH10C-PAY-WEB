@@ -25,6 +25,7 @@ export default function OrdersManager({
   const [revealedKeys, setRevealedKeys] = useState({});
   const [retryBusyId, setRetryBusyId] = useState(null);
   const [resendBusyId, setResendBusyId] = useState(null);
+  const [resendWebhookBusyId, setResendWebhookBusyId] = useState(null);
   const [deliveryEditOrder, setDeliveryEditOrder] = useState(null);
   const [deliveryForm, setDeliveryForm] = useState({
     deliveryTitle: "",
@@ -465,6 +466,27 @@ export default function OrdersManager({
       setError(err.message);
     } finally {
       setResendBusyId(null);
+    }
+  };
+
+  const handleResendSaleWebhook = async (order) => {
+    setResendWebhookBusyId(order._id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/orders/${order._id}/resend-sale-webhook`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not resend the sale webhook");
+      }
+      setSuccessMsg("Sale notification webhook resent to Discord successfully!");
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResendWebhookBusyId(null);
     }
   };
 
@@ -1141,6 +1163,28 @@ export default function OrdersManager({
                               )}
                             </div>
 
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              {order.saleNotified ? (
+                                <span
+                                  className="font-semibold text-emerald-400"
+                                  title={order.notifiedAt ? `Sale webhook sent at ${new Date(order.notifiedAt).toLocaleString()}` : "Sale webhook sent"}
+                                >
+                                  Webhook sent
+                                </span>
+                              ) : order.notifyError ? (
+                                <span
+                                  className="max-w-[130px] truncate font-semibold text-red-400"
+                                  title={`Sale webhook error: ${order.notifyError}`}
+                                >
+                                  Webhook failed
+                                </span>
+                              ) : order.status === "completed" ? (
+                                <span className="font-semibold text-neutral-500">
+                                  Webhook pending
+                                </span>
+                              ) : null}
+                            </div>
+
                             {(!isContent ? !order.licenseKey : !hasContent) &&
                               ["paid", "processing", "completed"].includes(order.status) && (
                                 <button
@@ -1154,37 +1198,35 @@ export default function OrdersManager({
                                 </button>
                               )}
 
-                            {isContent && hasContent && order.status === "completed" && (
-                              <div className="flex flex-wrap items-center gap-1.5">
+                            {order.status === "completed" && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                {isContent && hasContent && (
+                                  <button
+                                    onClick={() => openDeliveryEditor(order)}
+                                    className="rounded border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white hover:text-black transition"
+                                  >
+                                    Edit delivery
+                                  </button>
+                                )}
+                                {(isContent ? hasContent : Boolean(order.licenseKey)) && (
+                                  <button
+                                    onClick={() => handleResendDM(order)}
+                                    disabled={resendBusyId === order._id}
+                                    className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
+                                  >
+                                    {resendBusyId === order._id ? "Sending..." : "Resend DM"}
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => openDeliveryEditor(order)}
-                                  className="rounded border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-white hover:text-black transition"
+                                  onClick={() => handleResendSaleWebhook(order)}
+                                  disabled={resendWebhookBusyId === order._id}
+                                  className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-50"
+                                  title="Resend Discord New Sale webhook notification"
                                 >
-                                  Edit delivery
-                                </button>
-                                <button
-                                  onClick={() => handleResendDM(order)}
-                                  disabled={resendBusyId === order._id}
-                                  className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
-                                >
-                                  {resendBusyId === order._id ? "Sending..." : "Resend DM"}
+                                  {resendWebhookBusyId === order._id ? "Sending..." : "Resend Webhook"}
                                 </button>
                               </div>
                             )}
-
-                            {!isContent &&
-                              order.status === "completed" &&
-                              order.licenseKey && (
-                                <button
-                                  onClick={() => handleResendDM(order)}
-                                  disabled={resendBusyId === order._id}
-                                  className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300 hover:bg-sky-500/20 transition disabled:opacity-50"
-                                >
-                                  {resendBusyId === order._id
-                                    ? "Sending..."
-                                    : "Resend DM"}
-                                </button>
-                              )}
                           </div>
                         </td>
                         <td className="py-3 text-neutral-400">{timeAgo(order.createdAt)}</td>

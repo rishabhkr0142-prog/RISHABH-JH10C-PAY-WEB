@@ -11,6 +11,7 @@ import {
   releaseProductStockReservation,
 } from "@/lib/product-stock";
 import { normalizeDeliveryType } from "@/lib/delivery-content";
+import { notifySaleCompleted } from "@/lib/discord-sale-webhook";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,10 @@ export async function PATCH(request, { params }) {
           fulfillmentErr?.message || fulfillmentErr
         );
       }
+    }
+
+    if (order.status === "completed") {
+      notifySaleCompleted(order._id).catch(() => {});
     }
 
     revalidatePath("/admin/orders");

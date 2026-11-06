@@ -13,6 +13,7 @@
     "seed": "node scripts/seed.js",
     "check:images": "node scripts/check-product-images.js",
     "migrate:stock": "node scripts/migrate-stock-unlimited.js",
+    "migrate:sale-notifications": "node scripts/migrate-sale-notifications.js",
     "db:indexes": "node scripts/ensure-indexes.js",
     "test:idempotency": "node scripts/test-idempotency.mjs"
   },

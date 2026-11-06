@@ -181,6 +181,10 @@ const OrderSchema = new mongoose.Schema(
     dmSkipReason: { type: String, default: "" },
     dmSentAt: { type: Date, default: null },
     dmLastResentAt: { type: Date, default: null },
+    // Discord sale webhook notification
+    saleNotified: { type: Boolean, default: false, index: true },
+    notifiedAt: { type: Date, default: null },
+    notifyError: { type: String, default: "" },
   },
   { timestamps: true, collection: "orders" }
 );

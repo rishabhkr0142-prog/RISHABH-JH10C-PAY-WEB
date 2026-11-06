@@ -11,6 +11,7 @@ import {
   resolveDeliveryContent,
 } from "@/lib/delivery-content";
 import { claimProductStockItem } from "@/lib/product-stock";
+import { notifySaleCompleted } from "@/lib/discord-sale-webhook";
 
 /**
  * Server-side fulfillment pipeline.
@@ -313,6 +314,11 @@ export async function completeOrder(orderId) {
       { new: true }
     ).lean();
   }
+
+  // 4. Trigger Discord sale webhook asynchronously in background (never blocks fulfillment)
+  notifySaleCompleted(completed._id).catch((notifyErr) => {
+    console.error("Async sale notification trigger error:", notifyErr?.message || notifyErr);
+  });
 
   return { ok: true, order: finalOrder || completed };
 }

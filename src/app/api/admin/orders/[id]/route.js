@@ -97,14 +97,22 @@ export async function PATCH(request, { params }) {
       updates.paidAt = new Date();
     }
 
-    let order = await Order.findByIdAndUpdate(
-      id,
-      updates,
+    // Atomic conditional update: the status we validated against must still be
+    // current, otherwise another request already changed the order.
+    let order = await Order.findOneAndUpdate(
+      { _id: id, status: current.status },
+      { $set: updates },
       { new: true, runValidators: true }
     ).lean();
 
     if (!order) {
-      return NextResponse.json({ error: "Order not found." }, { status: 404 });
+      return NextResponse.json(
+        {
+          error:
+            "Order status changed by another request. Please refresh and try again.",
+        },
+        { status: 409 }
+      );
     }
 
     if (body.status === "cancelled" || body.status === "expired") {

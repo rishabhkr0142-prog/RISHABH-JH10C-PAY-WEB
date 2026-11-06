@@ -156,9 +156,21 @@ export async function POST(request, { params }) {
 
       if (isPastExpiry) {
         if (order.status !== "expired") {
-          await Order.findByIdAndUpdate(order._id, { status: "expired" });
+          const expired = await Order.findOneAndUpdate(
+            {
+              _id: order._id,
+              status: "pending",
+              expiresAt: { $lte: now },
+            },
+            { $set: { status: "expired" } },
+            { new: true }
+          ).lean();
+          if (expired) {
+            await releaseProductStockReservation(expired, "order_expired");
+          }
+        } else {
+          await releaseProductStockReservation(order, "order_expired");
         }
-        await releaseProductStockReservation(order, "order_expired");
         return NextResponse.json(
           {
             error:
@@ -222,23 +234,22 @@ export async function POST(request, { params }) {
       );
     }
 
-    // 8. Atomically link order and payment
-    const claimedPayment = await Payment.findOneAndUpdate(
+    // 8. Atomically link order and payment — one UTR can win exactly once.
+    const claimResult = await Payment.updateOne(
       { _id: payment._id, status: "unclaimed" },
       {
         $set: {
-          status: "claimed",
+          status: "matched",
           orderId: order._id,
         },
-      },
-      { new: true }
+      }
     );
 
-    if (!claimedPayment) {
+    if (claimResult.modifiedCount !== 1) {
       return NextResponse.json(
         {
           error:
-            "Payment was already claimed by another session. Please refresh.",
+            "Payment was already matched by another session. Please refresh.",
         },
         { status: 409 }
       );
@@ -258,10 +269,11 @@ export async function POST(request, { params }) {
     );
 
     if (!updatedOrder) {
-      // Rollback payment claim
-      await Payment.findByIdAndUpdate(payment._id, {
-        $set: { status: "unclaimed", orderId: null },
-      });
+      // Rollback the claim only if this request still owns it.
+      await Payment.updateOne(
+        { _id: payment._id, status: "matched", orderId: order._id },
+        { $set: { status: "unclaimed", orderId: null } }
+      );
       return NextResponse.json(
         { error: "Could not mark order as paid. Please try again." },
         { status: 500 }

@@ -12,7 +12,9 @@
     "start": "next start",
     "seed": "node scripts/seed.js",
     "check:images": "node scripts/check-product-images.js",
-    "migrate:stock": "node scripts/migrate-stock-unlimited.js"
+    "migrate:stock": "node scripts/migrate-stock-unlimited.js",
+    "db:indexes": "node scripts/ensure-indexes.js",
+    "test:idempotency": "node scripts/test-idempotency.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",

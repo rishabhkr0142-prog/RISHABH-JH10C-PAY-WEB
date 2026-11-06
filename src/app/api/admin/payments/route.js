@@ -20,7 +20,10 @@ export async function GET(request) {
     const status = searchParams.get("status");
 
     const query = {};
-    if (status && ["unclaimed", "claimed"].includes(status)) {
+    if (
+      status &&
+      ["unclaimed", "matched", "claimed", "deleted"].includes(status)
+    ) {
       query.status = status;
     }
 

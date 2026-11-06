@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
@@ -52,6 +52,17 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [cooldownChecked, setCooldownChecked] = useState(false);
   const [orderModal, setOrderModal] = useState(null);
+  const checkoutIdempotencyKeyRef = useRef("");
+
+  const getCheckoutIdempotencyKey = () => {
+    if (!checkoutIdempotencyKeyRef.current) {
+      checkoutIdempotencyKeyRef.current =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `ck_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    }
+    return checkoutIdempotencyKeyRef.current;
+  };
 
   const isContent = product.deliveryType === "content";
   const isAvailable =
@@ -211,7 +222,10 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
 
       const res = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": getCheckoutIdempotencyKey(),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -223,6 +237,9 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
         }
         throw new Error(data.error || "Failed to create order");
       }
+
+      // The order was created (or replayed); this checkout attempt is done.
+      checkoutIdempotencyKeyRef.current = "";
 
       if (data.checkoutUrl || data.orderId) {
         router.push(data.checkoutUrl || `/checkout/${data.orderId}`);

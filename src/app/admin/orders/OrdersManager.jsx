@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatPrice, timeAgo } from "@/lib/format";
@@ -39,6 +39,33 @@ export default function OrdersManager({
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [matchingBusy, setMatchingBusy] = useState(false);
 
+  // Payment soft-delete / restore state
+  const [paymentRows, setPaymentRows] = useState(payments);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState([]);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [restoreBusyId, setRestoreBusyId] = useState(null);
+  const [undoToast, setUndoToast] = useState(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const undoTimerRef = useRef(null);
+
+  // Keep the optimistic payment list in sync with fresh server data.
+  useEffect(() => {
+    setPaymentRows(payments);
+  }, [payments]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedPaymentIds([]);
+  }, [viewMode]);
+
   // Legacy LIB orders that may hold a key from the wrong auth app
   const [suspectOrders, setSuspectOrders] = useState([]);
   const [suspectLoading, setSuspectLoading] = useState(false);
@@ -56,9 +83,17 @@ export default function OrdersManager({
   });
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  const activePayments = useMemo(() => {
+    return paymentRows.filter((p) => p.status !== "deleted" && !p.archived);
+  }, [paymentRows]);
+
   const unclaimedPayments = useMemo(() => {
-    return payments.filter((p) => p.status === "unclaimed");
-  }, [payments]);
+    return activePayments.filter((p) => p.status === "unclaimed");
+  }, [activePayments]);
+
+  const deletedPayments = useMemo(() => {
+    return paymentRows.filter((p) => p.status === "deleted" || p.archived);
+  }, [paymentRows]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -186,6 +221,204 @@ export default function OrdersManager({
       setError(err.message);
     } finally {
       setMatchingBusy(false);
+    }
+  };
+
+  const showUndoToast = (ids) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({ ids, label: `${ids.length} payment${ids.length > 1 ? "s" : ""} deleted.` });
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+      undoTimerRef.current = null;
+    }, 10000);
+  };
+
+  const openDeletePayment = (payment) => {
+    setError("");
+    setDeleteReason("");
+    setDeleteTarget({ ids: [payment._id], payments: [payment] });
+  };
+
+  const openDeleteSelected = () => {
+    const selected = unclaimedPayments.filter((p) =>
+      selectedPaymentIds.includes(p._id)
+    );
+    if (selected.length === 0) {
+      setError("Select at least one unclaimed payment to delete.");
+      return;
+    }
+    if (selected.length > 50) {
+      setError("You can delete up to 50 payments at a time.");
+      return;
+    }
+    setError("");
+    setDeleteReason("");
+    setDeleteTarget({ ids: selected.map((p) => p._id), payments: selected });
+  };
+
+  const handleConfirmDeletePayments = async () => {
+    if (!deleteTarget?.ids?.length) return;
+
+    setDeleteBusy(true);
+    setError("");
+    const ids = deleteTarget.ids;
+
+    try {
+      const res =
+        ids.length === 1
+          ? await fetch(`/api/admin/payments/${ids[0]}`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reason: deleteReason.trim() }),
+            })
+          : await fetch("/api/admin/payments/bulk-action", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "delete",
+                ids,
+                reason: deleteReason.trim(),
+              }),
+            });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not delete payment(s).");
+      }
+
+      const deletedIds = (data.deletedIds || ids).map(String);
+      const nowIso = new Date().toISOString();
+
+      // Optimistically hide/update rows immediately; the badge re-counts too.
+      setPaymentRows((prev) =>
+        prev.map((p) =>
+          deletedIds.includes(String(p._id))
+            ? {
+                ...p,
+                status: "deleted",
+                archived: true,
+                deletedAt: nowIso,
+                deleteReason: deleteReason.trim(),
+              }
+            : p
+        )
+      );
+      setSelectedPaymentIds((prev) =>
+        prev.filter((id) => !deletedIds.includes(String(id)))
+      );
+      setDeleteTarget(null);
+      setDeleteReason("");
+
+      if (data.skipped > 0) {
+        setError(
+          `${data.skipped} payment(s) were skipped because they are no longer unclaimed.`
+        );
+      }
+
+      showUndoToast(deletedIds);
+      setSuccessMsg(
+        `${deletedIds.length} payment${deletedIds.length > 1 ? "s" : ""} deleted from the unclaimed list.`
+      );
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleRestorePayment = async (payment) => {
+    setRestoreBusyId(payment._id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/payments/${payment._id}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Restored from admin panel" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not restore payment.");
+      }
+
+      setPaymentRows((prev) =>
+        prev.map((p) =>
+          String(p._id) === String(payment._id)
+            ? {
+                ...p,
+                status: "unclaimed",
+                archived: false,
+                deletedAt: null,
+                deletedBy: "",
+                deleteReason: "",
+              }
+            : p
+        )
+      );
+      setSuccessMsg(`Payment ${payment.utr} restored to unclaimed.`);
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRestoreBusyId(null);
+    }
+  };
+
+  const handleUndoDelete = async () => {
+    if (!undoToast?.ids?.length) return;
+
+    const ids = undoToast.ids;
+    setUndoBusy(true);
+    setError("");
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+
+    try {
+      const res = await fetch("/api/admin/payments/bulk-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "restore",
+          ids,
+          reason: "Undo delete",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not undo the delete.");
+      }
+
+      const restoredIds = (data.restoredIds || ids).map(String);
+      setPaymentRows((prev) =>
+        prev.map((p) =>
+          restoredIds.includes(String(p._id))
+            ? {
+                ...p,
+                status: "unclaimed",
+                archived: false,
+                deletedAt: null,
+                deletedBy: "",
+                deleteReason: "",
+              }
+            : p
+        )
+      );
+
+      setUndoToast(null);
+      setSuccessMsg(
+        `${restoredIds.length} payment${restoredIds.length > 1 ? "s" : ""} restored to unclaimed.`
+      );
+      setTimeout(() => setSuccessMsg(""), 4000);
+      router.refresh();
+    } catch (err) {
+      setError(err.message);
+      setUndoToast(null);
+    } finally {
+      setUndoBusy(false);
     }
   };
 
@@ -323,9 +556,11 @@ export default function OrdersManager({
   }, [orders, search, filterStatus]);
 
   const filteredPayments = useMemo(() => {
-    let list = payments;
+    let list = paymentRows;
     if (viewMode === "unclaimed") {
-      list = payments.filter((p) => p.status === "unclaimed");
+      list = paymentRows.filter((p) => p.status === "unclaimed" && !p.archived);
+    } else if (viewMode === "payments" && !showDeleted) {
+      list = paymentRows.filter((p) => p.status !== "deleted" && !p.archived);
     }
     if (!search.trim()) return list;
     const q = search.toLowerCase();
@@ -336,7 +571,35 @@ export default function OrdersManager({
       const orderMatch = String(p.orderId || "").toLowerCase().includes(q);
       return utrMatch || txnMatch || payerMatch || orderMatch;
     });
-  }, [payments, viewMode, search]);
+  }, [paymentRows, viewMode, search, showDeleted]);
+
+  const selectablePayments = useMemo(
+    () =>
+      viewMode === "unclaimed"
+        ? filteredPayments.filter((p) => p.status === "unclaimed" && !p.archived)
+        : [],
+    [filteredPayments, viewMode]
+  );
+
+  const allSelectableSelected =
+    selectablePayments.length > 0 &&
+    selectablePayments.every((p) => selectedPaymentIds.includes(p._id));
+
+  const toggleSelectAllPayments = () => {
+    if (allSelectableSelected) {
+      setSelectedPaymentIds([]);
+    } else {
+      setSelectedPaymentIds(selectablePayments.map((p) => p._id));
+    }
+  };
+
+  const toggleSelectPayment = (paymentId) => {
+    setSelectedPaymentIds((prev) =>
+      prev.includes(paymentId)
+        ? prev.filter((id) => id !== paymentId)
+        : [...prev, paymentId]
+    );
+  };
 
   const renderBadge = (status) => {
     switch (status) {
@@ -440,7 +703,7 @@ export default function OrdersManager({
               : "border border-theme-border bg-theme-surface text-neutral-400 hover:text-white"
           }`}
         >
-          All Payments ({payments.length})
+          All Payments ({paymentRows.length})
         </button>
 
         <button
@@ -653,7 +916,46 @@ export default function OrdersManager({
             ))}
           </div>
         )}
+
+        {viewMode === "payments" && (
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[11px] font-semibold text-neutral-400">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(e) => setShowDeleted(e.target.checked)}
+              className="h-3.5 w-3.5 accent-red-500"
+            />
+            Show deleted ({deletedPayments.length})
+          </label>
+        )}
       </div>
+      )}
+
+      {/* ── Bulk selection toolbar (Unclaimed view) ── */}
+      {viewMode === "unclaimed" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-theme-border bg-black/40 px-4 py-2.5 text-xs">
+          <label className="flex cursor-pointer items-center gap-2 font-semibold text-neutral-300">
+            <input
+              type="checkbox"
+              checked={allSelectableSelected}
+              onChange={toggleSelectAllPayments}
+              disabled={selectablePayments.length === 0}
+              className="h-3.5 w-3.5 accent-red-500"
+            />
+            Select all
+          </label>
+          <span className="font-mono text-[11px] text-neutral-500">
+            {selectedPaymentIds.length} selected
+          </span>
+          <button
+            type="button"
+            onClick={openDeleteSelected}
+            disabled={selectedPaymentIds.length === 0}
+            className="ml-auto rounded-md border border-red-500/50 px-3 py-1.5 text-[11px] font-semibold text-red-400 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Delete selected
+          </button>
+        </div>
       )}
 
       {/* ── VIEW 1: ORDERS TABLE ── */}
@@ -967,6 +1269,18 @@ export default function OrdersManager({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-theme-border/50 text-neutral-400">
+                    {viewMode === "unclaimed" && (
+                      <th className="w-8 py-3">
+                        <input
+                          type="checkbox"
+                          checked={allSelectableSelected}
+                          onChange={toggleSelectAllPayments}
+                          disabled={selectablePayments.length === 0}
+                          aria-label="Select all unclaimed payments"
+                          className="h-3.5 w-3.5 accent-red-500"
+                        />
+                      </th>
+                    )}
                     <th className="py-3 font-medium">12-Digit UTR</th>
                     <th className="py-3 font-medium">Amount</th>
                     <th className="py-3 font-medium">Payer UPI / Txn ID</th>
@@ -977,11 +1291,25 @@ export default function OrdersManager({
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {filteredPayments.map((p) => {
-                    const isUnclaimed = p.status === "unclaimed";
+                    const isUnclaimed = p.status === "unclaimed" && !p.archived;
+                    const isDeleted = p.status === "deleted" || p.archived;
+                    const isMatched =
+                      p.status === "matched" || p.status === "claimed";
                     const amountRupees = (Number(p.amountPaise || 0) / 100).toFixed(2);
 
                     return (
                       <tr key={p._id} className="transition hover:bg-white/5">
+                        {viewMode === "unclaimed" && (
+                          <td className="py-3.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedPaymentIds.includes(p._id)}
+                              onChange={() => toggleSelectPayment(p._id)}
+                              aria-label={`Select payment ${p.utr}`}
+                              className="h-3.5 w-3.5 accent-red-500"
+                            />
+                          </td>
+                        )}
                         <td className="py-3.5 font-mono font-bold text-white">
                           <span className="rounded border border-white/10 bg-black/60 px-2 py-0.5">
                             {p.utr}
@@ -999,17 +1327,36 @@ export default function OrdersManager({
                           )}
                         </td>
                         <td className="py-3.5">
-                          {isUnclaimed ? (
+                          {isDeleted ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                              deleted
+                            </span>
+                          ) : isUnclaimed ? (
                             <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
                               unclaimed
                             </span>
                           ) : (
                             <span className="badge-theme px-2 py-0.5 text-[10px] font-semibold">
-                              claimed
+                              {isMatched && p.status === "matched"
+                                ? "matched"
+                                : "claimed"}
                             </span>
                           )}
-                          {p.orderId && (
+                          {isDeleted && p.deletedAt && (
+                            <span className="block mt-0.5 text-[10px] text-neutral-500">
+                              {timeAgo(p.deletedAt)}
+                            </span>
+                          )}
+                          {isDeleted && p.deleteReason && (
+                            <span
+                              className="block mt-0.5 max-w-[180px] truncate text-[10px] text-neutral-500"
+                              title={p.deleteReason}
+                            >
+                              {p.deleteReason}
+                            </span>
+                          )}
+                          {p.orderId && !isDeleted && (
                             <span className="block mt-0.5 font-mono text-[10px] text-neutral-400">
                               Order #{String(p.orderId._id || p.orderId).slice(-8)}
                             </span>
@@ -1025,21 +1372,48 @@ export default function OrdersManager({
                           </span>
                         </td>
                         <td className="py-3.5 text-right">
-                          {isUnclaimed ? (
+                          {isDeleted ? (
                             <button
-                              onClick={() => {
-                                setMatchingPayment(p);
-                                setSelectedOrderId("");
-                                setError("");
-                              }}
-                              className="btn-primary !px-2.5 !py-1 !text-[11px] font-bold"
+                              onClick={() => handleRestorePayment(p)}
+                              disabled={restoreBusyId === p._id}
+                              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
                             >
-                              Match with Order →
+                              {restoreBusyId === p._id ? "Restoring..." : "Restore"}
                             </button>
+                          ) : isUnclaimed ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setMatchingPayment(p);
+                                  setSelectedOrderId("");
+                                  setError("");
+                                }}
+                                className="btn-primary !px-2.5 !py-1 !text-[11px] font-bold"
+                              >
+                                Match with Order →
+                              </button>
+                              <button
+                                onClick={() => openDeletePayment(p)}
+                                className="rounded-md border border-red-500/50 px-2.5 py-1 text-[11px] font-semibold text-red-400 transition hover:bg-red-500/15"
+                                title="Soft-delete this unclaimed payment"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-[11px] font-mono text-neutral-500">
-                              Linked ✓
-                            </span>
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-[11px] font-mono text-neutral-500">
+                                Linked ✓
+                              </span>
+                              <button
+                                type="button"
+                                disabled
+                                title="Only unclaimed payments can be deleted."
+                                className="cursor-not-allowed rounded-md border border-red-500/20 px-2 py-1 text-[11px] font-semibold text-red-400/40"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -1384,6 +1758,99 @@ export default function OrdersManager({
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Payment Delete Confirmation Modal ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="glass w-full max-w-md p-6 shadow-2xl"
+            >
+              <h3 className="text-base font-bold text-white">
+                {deleteTarget.payments.length === 1
+                  ? "Delete Unclaimed Payment?"
+                  : `Delete ${deleteTarget.payments.length} Unclaimed Payments?`}
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-neutral-400">
+                {deleteTarget.payments.length === 1
+                  ? `Delete this payment (UTR ${deleteTarget.payments[0].utr}, ₹${(
+                      Number(deleteTarget.payments[0].amountPaise || 0) / 100
+                    ).toFixed(2)})? It will be removed from the unclaimed list.`
+                  : `Delete ${deleteTarget.payments.length} selected payments? They will be removed from the unclaimed list.`}
+              </p>
+
+              <div className="mt-4">
+                <label className="label">Reason (optional)</label>
+                <textarea
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  placeholder="e.g. Test transfer, duplicate entry, wrong UTR..."
+                  className="input resize-y text-xs"
+                />
+              </div>
+
+              <p className="mt-2 text-[10px] leading-relaxed text-neutral-500">
+                The record is kept as deleted (soft delete). You can restore it
+                from “Show deleted” or use Undo for 10 seconds.
+              </p>
+
+              <div className="mt-5 flex justify-end gap-2.5 border-t border-theme-border/50 pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteTarget(null);
+                    setDeleteReason("");
+                  }}
+                  disabled={deleteBusy}
+                  className="btn-ghost !py-2 !text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeletePayments}
+                  disabled={deleteBusy}
+                  className="rounded-md border border-red-500/50 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/25 disabled:opacity-50"
+                >
+                  {deleteBusy ? "Deleting..." : "Confirm Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Undo delete toast (10s) ── */}
+      <AnimatePresence>
+        {undoToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-4 rounded-xl border border-theme-border bg-neutral-950 px-4 py-3 text-xs text-white shadow-2xl"
+          >
+            <span>{undoToast.label}</span>
+            <button
+              type="button"
+              onClick={handleUndoDelete}
+              disabled={undoBusy}
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              {undoBusy ? "Restoring..." : "Undo"}
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

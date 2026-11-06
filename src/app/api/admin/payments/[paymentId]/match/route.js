@@ -41,7 +41,14 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "Payment not found." }, { status: 404 });
     }
 
-    if (payment.status === "claimed") {
+    if (payment.status === "deleted" || payment.archived) {
+      return NextResponse.json(
+        { error: "This payment was deleted and cannot be matched." },
+        { status: 409 }
+      );
+    }
+
+    if (payment.status !== "unclaimed") {
       return NextResponse.json(
         { error: "This payment is already claimed by another order." },
         { status: 400 }
@@ -91,24 +98,30 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Atomically claim payment
-    const claimedPayment = await Payment.findOneAndUpdate(
+    // Atomically claim payment. The status guard makes this a single winner
+    // even when two requests try to match the same UTR simultaneously.
+    const claimResult = await Payment.updateOne(
       { _id: payment._id, status: "unclaimed" },
       {
         $set: {
-          status: "claimed",
+          status: "matched",
           orderId: order._id,
         },
-      },
-      { new: true }
+      }
     );
 
-    if (!claimedPayment) {
+    if (claimResult.modifiedCount !== 1) {
       return NextResponse.json(
-        { error: "Payment was claimed in a concurrent request." },
+        { error: "Payment was matched in a concurrent request." },
         { status: 409 }
       );
     }
+
+    const claimedPayment = {
+      ...payment.toObject(),
+      status: "matched",
+      orderId: order._id,
+    };
 
     // Update order status to paid only if it is still unpaid.
     const updatedOrder = await Order.findOneAndUpdate(
@@ -125,9 +138,10 @@ export async function POST(request, { params }) {
     );
 
     if (!updatedOrder) {
-      await Payment.findByIdAndUpdate(payment._id, {
-        $set: { status: "unclaimed", orderId: null },
-      });
+      await Payment.updateOne(
+        { _id: payment._id, status: "matched", orderId: order._id },
+        { $set: { status: "unclaimed", orderId: null } }
+      );
       return NextResponse.json(
         { error: "Order was already paid by another request." },
         { status: 409 }

@@ -47,12 +47,27 @@ export default async function OrderCheckoutPage({ params }) {
     redirect("/dashboard");
   }
 
-  // Server-side auto-expiration check
+  // Server-side auto-expiration check (atomic condition, no read-then-write).
   const now = new Date();
-  if (order.status === "pending" && order.expiresAt && new Date(order.expiresAt) <= now) {
-    await Order.findByIdAndUpdate(orderId, { status: "expired" });
-    await releaseProductStockReservation(order, "order_expired");
-    order.status = "expired";
+  if (
+    order.status === "pending" &&
+    order.expiresAt &&
+    new Date(order.expiresAt) <= now
+  ) {
+    const expired = await Order.findOneAndUpdate(
+      {
+        _id: order._id,
+        status: "pending",
+        expiresAt: { $lte: now },
+      },
+      { $set: { status: "expired" } },
+      { new: true }
+    ).lean();
+
+    if (expired) {
+      order.status = "expired";
+      await releaseProductStockReservation(expired, "order_expired");
+    }
   } else if (order.status === "cancelled") {
     await releaseProductStockReservation(order, "order_cancelled");
   }

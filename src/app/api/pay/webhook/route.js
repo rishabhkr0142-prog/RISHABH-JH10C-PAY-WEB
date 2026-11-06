@@ -88,6 +88,7 @@ export async function POST(request) {
 
     // Validate UTR: digits only, minimum length 6, typical length 12
     const cleanUtr = String(utr || "").trim().replace(/[\s-]/g, "");
+    const cleanTxnId = String(txnId || "").trim();
     if (!/^\d{6,20}$/.test(cleanUtr)) {
       return NextResponse.json(
         { error: "Invalid UTR format. Must be numeric digits only." },
@@ -122,7 +123,7 @@ export async function POST(request) {
     try {
       paymentDoc = await Payment.create({
         utr: cleanUtr,
-        txnId: String(txnId || "").trim(),
+        txnId: cleanTxnId,
         amountPaise: parsedAmountPaise,
         payerUpi: String(payerUpi || "").trim(),
         paidAt: paymentDate,
@@ -130,22 +131,26 @@ export async function POST(request) {
         receivedAt: new Date(),
       });
     } catch (err) {
-      // Only a true E11000 duplicate-key error on unique `utr` is idempotent.
+      // E11000 is idempotent for both the unique UTR and non-empty Txn ID.
       if (err?.code === 11000) {
         isDuplicate = true;
-        paymentDoc = await Payment.findOne({ utr: cleanUtr });
+        paymentDoc = await Payment.findOne(
+          cleanTxnId
+            ? { $or: [{ utr: cleanUtr }, { txnId: cleanTxnId }] }
+            : { utr: cleanUtr }
+        );
       } else {
         throw err;
       }
     }
 
-    // If payment already exists and is already claimed, return 200 idempotently
+    // If the UTR/Txn was already recorded, return 200 idempotently.
     if (isDuplicate) {
       return NextResponse.json({
         ok: true,
         duplicate: true,
-        message: "Payment with this UTR has already been recorded.",
-        matched: paymentDoc?.status === "claimed",
+        message: "Payment with this UTR/Txn ID has already been recorded.",
+        matched: ["matched", "claimed"].includes(paymentDoc?.status),
         paymentId: paymentDoc?._id,
       });
     }
@@ -185,17 +190,18 @@ export async function POST(request) {
         });
       }
 
-      // Atomically claim the payment
-      const claimedPayment = await Payment.findOneAndUpdate(
+      // Atomically claim the payment — exactly one request can win this UTR.
+      const claimResult = await Payment.updateOne(
         { _id: paymentDoc._id, status: "unclaimed" },
         {
           $set: {
-            status: "claimed",
+            status: "matched",
             orderId: targetOrder._id,
           },
-        },
-        { new: true }
+        }
       );
+
+      const claimedPayment = claimResult.modifiedCount === 1;
 
       if (claimedPayment) {
         // Atomically transition the order to 'paid'
@@ -238,10 +244,15 @@ export async function POST(request) {
           revalidatePath("/admin/orders");
           revalidatePath("/admin");
         } else {
-          // Rollback payment claim if order was not pending
-          await Payment.findByIdAndUpdate(paymentDoc._id, {
-            $set: { status: "unclaimed", orderId: null },
-          });
+          // Rollback the claim only if this request still owns it.
+          await Payment.updateOne(
+            {
+              _id: paymentDoc._id,
+              status: "matched",
+              orderId: targetOrder._id,
+            },
+            { $set: { status: "unclaimed", orderId: null } }
+          );
         }
       }
     }

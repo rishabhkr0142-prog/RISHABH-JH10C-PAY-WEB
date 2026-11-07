@@ -134,6 +134,9 @@ const OrderSchema = new mongoose.Schema(
     resellerDiscount: { type: Number, default: 0, min: 0 },
     resellerDiscountPercent: { type: Number, default: 0, min: 0 },
     originalPrice: { type: Number, default: 0, min: 0 },
+    // Reseller membership legal acknowledgement snapshot.
+    acceptedTermsAt: { type: Date, default: null },
+    termsVersion: { type: String, default: "" },
     // Buyer details snapshot for resilience
     customerName: { type: String, default: "Guest" },
     email: { type: String, default: "" },

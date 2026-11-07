@@ -21,6 +21,7 @@ import {
 } from "@/lib/reseller";
 
 const RESELLER_ORDER_TTL_MS = 15 * 60 * 1000;
+const RESELLER_TERMS_VERSION = "v1";
 
 function buildResellerResponse(order, reused = false) {
   const fampayUpiId =
@@ -55,8 +56,20 @@ export async function createResellerOrder({
   session,
   idempotencyKey = "",
   endpoint = "POST /api/reseller/join",
+  termsAccepted = false,
+  refundAckAccepted = false,
 }) {
   await connectDB();
+
+  if (termsAccepted !== true || refundAckAccepted !== true) {
+    return {
+      status: 400,
+      body: {
+        error:
+          "Please accept the Reseller Terms & Conditions and the non-refundable acknowledgement before joining.",
+      },
+    };
+  }
 
   let idempotency = { mode: "none" };
 
@@ -144,6 +157,16 @@ export async function createResellerOrder({
     }).sort({ createdAt: -1 });
 
     if (existingPendingOrder) {
+      const acceptedTermsAt = existingPendingOrder.acceptedTermsAt || new Date();
+      const termsVersion = RESELLER_TERMS_VERSION;
+
+      await Order.updateOne(
+        { _id: existingPendingOrder._id },
+        { $set: { acceptedTermsAt, termsVersion } }
+      );
+      existingPendingOrder.acceptedTermsAt = acceptedTermsAt;
+      existingPendingOrder.termsVersion = termsVersion;
+
       return succeed(buildResellerResponse(existingPendingOrder, true));
     }
 
@@ -214,6 +237,8 @@ export async function createResellerOrder({
       price: RESELLER_PRICE,
       amount: RESELLER_PRICE,
       originalPrice: RESELLER_PRICE,
+      acceptedTermsAt: new Date(),
+      termsVersion: RESELLER_TERMS_VERSION,
       status: "pending",
       expiresAt: new Date(Date.now() + RESELLER_ORDER_TTL_MS),
       productName: RESELLER_PRODUCT_NAME,

@@ -31,6 +31,41 @@ const BENEFITS = [
   },
 ];
 
+const TERMS_SECTIONS = [
+  {
+    title: "Membership",
+    body: "The Reseller membership costs a one-time fee of ₹149 and is valid for the lifetime of the account.",
+  },
+  {
+    title: "Discount",
+    body: "Resellers get 50% off on License App (auth panel) products only, including future ones. Other products are not discounted.",
+  },
+  {
+    title: "No stacking",
+    body: "Reseller and coupon/offer discounts do not stack; the larger discount applies.",
+  },
+  {
+    title: "Non-refundable",
+    body: "The membership fee is non-refundable once activated.",
+  },
+  {
+    title: "Non-transferable",
+    body: "The membership is tied to one account and cannot be transferred, shared, or sold.",
+  },
+  {
+    title: "Fair use",
+    body: "We may revoke membership without refund for abuse, fraud, chargebacks, payment manipulation, or violating the store rules.",
+  },
+  {
+    title: "Changes",
+    body: "We may change the discount or terms in the future; changes apply to future purchases and will be updated on this page.",
+  },
+  {
+    title: "Verification",
+    body: "Membership activates after payment is verified (UPI UTR). Fake or duplicate UTR attempts will result in a ban.",
+  },
+];
+
 function CheckIcon() {
   return (
     <svg
@@ -59,13 +94,28 @@ export default function ResellerClient({
   const [isReseller, setIsReseller] = useState(initialIsReseller);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showTerms, setShowTerms] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [refundAckAccepted, setRefundAckAccepted] = useState(false);
   const sessionSyncedRef = useRef(false);
+  const canJoin = termsAccepted && refundAckAccepted;
 
   useEffect(() => {
     if (!isReseller || sessionSyncedRef.current) return;
     sessionSyncedRef.current = true;
     update?.();
   }, [isReseller, update]);
+
+  useEffect(() => {
+    if (!showTerms) return;
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setShowTerms(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showTerms]);
 
   const getKey = () => {
     if (!idempotencyKeyRef.current) {
@@ -79,6 +129,13 @@ export default function ResellerClient({
 
   const handleJoin = async () => {
     if (isReseller) return;
+
+    if (!canJoin) {
+      setError(
+        "Please tick both checkboxes to accept the terms and the non-refundable acknowledgement."
+      );
+      return;
+    }
 
     if (!loggedIn) {
       router.push(`/login?callbackUrl=${encodeURIComponent("/reseller")}`);
@@ -95,7 +152,7 @@ export default function ResellerClient({
           "Content-Type": "application/json",
           "Idempotency-Key": getKey(),
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ termsAccepted, refundAckAccepted }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -276,11 +333,57 @@ export default function ResellerClient({
                 ))}
               </ul>
 
+              <div className="mt-5 space-y-3 border-t border-white/10 pt-5">
+                <label className="flex cursor-pointer items-start gap-2.5 text-[11px] leading-relaxed text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(event) => {
+                      setTermsAccepted(event.target.checked);
+                      if (event.target.checked) setError("");
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-white"
+                  />
+                  <span>
+                    I have read and agree to the{" "}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setShowTerms(true);
+                      }}
+                      className="font-semibold text-white underline decoration-white/40 underline-offset-2 hover:decoration-white"
+                    >
+                      Reseller Terms &amp; Conditions
+                    </button>
+                    .
+                  </span>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-2.5 text-[11px] leading-relaxed text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={refundAckAccepted}
+                    onChange={(event) => {
+                      setRefundAckAccepted(event.target.checked);
+                      if (event.target.checked) setError("");
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-white"
+                  />
+                  <span>
+                    I understand this is a one-time lifetime membership, it is
+                    non-refundable, and the 50% discount applies only to License
+                    App (auth panel) products.
+                  </span>
+                </label>
+              </div>
+
               <button
                 type="button"
                 onClick={handleJoin}
-                disabled={loading}
-                className="btn-primary mt-6 w-full py-3.5 text-sm font-bold shadow-lg disabled:opacity-60"
+                disabled={loading || !canJoin}
+                className="btn-primary mt-4 w-full py-3.5 text-sm font-bold shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -315,6 +418,89 @@ export default function ResellerClient({
           </AnimatePresence>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showTerms && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowTerms(false)}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reseller Terms and Conditions"
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              onClick={(event) => event.stopPropagation()}
+              className="glass flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl"
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4 sm:p-5">
+                <div>
+                  <h2 className="text-sm font-bold text-white">
+                    Reseller Terms &amp; Conditions
+                  </h2>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-wider text-neutral-500">
+                    Version v1
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTerms(false)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 text-neutral-300 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Close terms"
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                <ol className="space-y-3.5">
+                  {TERMS_SECTIONS.map((section, index) => (
+                    <li
+                      key={section.title}
+                      className="text-[11px] leading-relaxed text-neutral-300"
+                    >
+                      <span className="font-semibold text-white">
+                        {index + 1}. {section.title}:
+                      </span>{" "}
+                      {section.body}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="border-t border-white/10 p-4 sm:p-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTermsAccepted(true);
+                    setError("");
+                    setShowTerms(false);
+                  }}
+                  className="btn-primary w-full py-3 text-xs font-bold"
+                >
+                  I Agree
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

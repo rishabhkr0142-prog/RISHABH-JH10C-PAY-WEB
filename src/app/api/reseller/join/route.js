@@ -32,10 +32,14 @@ export async function POST(request) {
     request.headers.get("idempotency-key") || ""
   ).trim();
 
+  const body = await request.json().catch(() => ({}));
+
   const result = await createResellerOrder({
     session,
     idempotencyKey,
     endpoint: "POST /api/reseller/join",
+    termsAccepted: body?.termsAccepted === true,
+    refundAckAccepted: body?.refundAckAccepted === true,
   });
 
   if (result.status < 400) {

@@ -87,6 +87,7 @@ export async function POST(request) {
     });
 
     revalidatePath("/");
+    revalidatePath("/offers");
     revalidatePath("/admin/offers");
 
     return NextResponse.json({ ok: true, offer: JSON.parse(JSON.stringify(offer)) });

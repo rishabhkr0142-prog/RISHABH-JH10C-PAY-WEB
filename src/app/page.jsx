@@ -6,7 +6,7 @@ import { getGoogleUsersStats } from "@/lib/google-users";
 import User from "@/models/User";
 import Hero from "@/components/Hero";
 import StatsSection from "@/components/StatsSection";
-import OffersSection from "@/components/OffersSection";
+import OffersBanner from "@/components/OffersBanner";
 import CommunitySection from "@/components/CommunitySection";
 import GoogleUsersSection from "@/components/GoogleUsersSection";
 import FeaturesGrid from "@/components/FeaturesGrid";
@@ -87,8 +87,8 @@ export default async function HomePage() {
       {/* 2. Live Stats Strip right under hero */}
       <StatsSection stats={stats} />
 
-      {/* 3. Time-limited offers (auto-hides when expired) */}
-      <OffersSection offers={offers} />
+      {/* 3. Promotional banner strip linking to /offers (auto-hides when 0 offers) */}
+      <OffersBanner count={offers.length} />
 
       {/* 4. Community section with overlapping Discord avatars */}
       <CommunitySection communityData={communityData} />

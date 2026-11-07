@@ -137,6 +137,7 @@ export async function PUT(request, { params }) {
     }
 
     revalidatePath("/");
+    revalidatePath("/offers");
     revalidatePath("/admin/offers");
 
     return NextResponse.json({ ok: true, offer: JSON.parse(JSON.stringify(offer)) });
@@ -170,6 +171,7 @@ export async function DELETE(request, { params }) {
     }
 
     revalidatePath("/");
+    revalidatePath("/offers");
     revalidatePath("/admin/offers");
 
     return NextResponse.json({ ok: true, deleted: { _id: String(deleted._id) } });

@@ -164,16 +164,61 @@ function UserMenu({ session }) {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session, status } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [offersCount, setOffersCount] = useState(0);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
+  // If a legacy bookmark / external link points to /#offers, redirect to /offers
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkHash = () => {
+      if (window.location.hash === "#offers") {
+        router.replace("/offers");
+      }
+    };
+    checkHash();
+    window.addEventListener("hashchange", checkHash);
+    return () => window.removeEventListener("hashchange", checkHash);
+  }, [router, pathname]);
+
+  // Poll active offers count for the navbar badge
+  useEffect(() => {
+    let isMounted = true;
+    const fetchOffersCount = async () => {
+      try {
+        const res = await fetch("/api/offers/count", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && typeof data.count === "number") {
+            setOffersCount(data.count);
+          }
+        }
+      } catch {
+        // fail gracefully, badge stays hidden
+      }
+    };
+
+    fetchOffersCount();
+    const interval = setInterval(fetchOffersCount, 30000);
+    const handleUpdate = () => fetchOffersCount();
+    window.addEventListener("offers-updated", handleUpdate);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      window.removeEventListener("offers-updated", handleUpdate);
+    };
+  }, []);
+
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/products", label: "Products" },
+    { href: "/offers", label: "Offers", badge: offersCount },
     ...(status === "authenticated"
       ? [{ href: "/dashboard", label: "Dashboard" }]
       : []),
@@ -197,13 +242,18 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                className={`relative flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
                   active
                     ? "bg-white/10 text-white font-semibold"
                     : "text-neutral-400 hover:bg-white/5 hover:text-white"
                 }`}
               >
-                {link.label}
+                <span>{link.label}</span>
+                {link.badge != null && link.badge > 0 && (
+                  <span className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-1.5 py-0.5 text-[9px] font-black leading-none text-black shadow-sm">
+                    {link.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -266,13 +316,18 @@ export default function Navbar() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
                       active
                         ? "bg-white/10 text-white font-semibold"
                         : "text-neutral-400 hover:text-white"
                     }`}
                   >
-                    {link.label}
+                    <span>{link.label}</span>
+                    {link.badge != null && link.badge > 0 && (
+                      <span className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 px-2 py-0.5 text-[10px] font-black leading-none text-black">
+                        {link.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

@@ -105,7 +105,7 @@ export default function RootLayout({ children }) {
         <link rel="manifest" href="/manifest.webmanifest" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){ try { var valid = ['mono','cyber','emerald','crimson','sapphire','midnight','amethyst','forest','ocean','ruby','ember']; var t = localStorage.getItem('jh10c_theme') || 'mono'; if (valid.indexOf(t) === -1) { t = 'mono'; } document.documentElement.setAttribute('data-theme', t); } catch(e){} })();`,
+            __html: `(function(){ try { var valid = ['mono','cyber','emerald','crimson','sapphire']; var t = localStorage.getItem('jh10c_theme') || 'mono'; if (valid.indexOf(t) === -1) { t = 'mono'; try { localStorage.setItem('jh10c_theme', 'mono'); } catch(e){} } document.documentElement.setAttribute('data-theme', t); } catch(e){} })();`,
           }}
         />
       </head>

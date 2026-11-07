@@ -1,34 +1,36 @@
-const fs = require("fs");
-const path = require("path");
-const mongoose = require("mongoose");
+const { connect, disconnect } = require("./lib/db");
 
-function loadEnv() {
-  for (const file of [".env.local", ".env"]) {
-    const full = path.resolve(process.cwd(), file);
-    if (!fs.existsSync(full)) continue;
-    const text = fs.readFileSync(full, "utf8");
-    for (const line of text.split(/\r?\n/)) {
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)\s*$/);
-      if (!match) continue;
-      const key = match[1];
-      if (process.env[key] !== undefined) continue;
-      let value = match[2].trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      process.env[key] = value.replace(/\\n/g, "\n");
-    }
-  }
+function indexOptionsMatch(index, options) {
+  return (
+    Boolean(index.unique) === Boolean(options.unique) &&
+    (index.expireAfterSeconds ?? null) === (options.expireAfterSeconds ?? null) &&
+    JSON.stringify(index.partialFilterExpression || null) ===
+      JSON.stringify(options.partialFilterExpression || null)
+  );
 }
-
-loadEnv();
 
 async function createIndex(db, collection, keys, options) {
   const label = `${collection}.${options.name}`;
   try {
+    const indexes = await db.collection(collection).indexes();
+    const wanted = JSON.stringify(keys);
+    const sameKeys = indexes.filter(
+      (index) => JSON.stringify(index.key) === wanted
+    );
+    const matching = sameKeys.find((index) => indexOptionsMatch(index, options));
+    if (matching) {
+      console.log(`OK   ${label} -> already exists as ${matching.name}`);
+      return true;
+    }
+    if (sameKeys.length) {
+      console.error(
+        `FAIL ${label}: an index with the same keys already exists as ${sameKeys
+          .map((index) => index.name)
+          .join(", ")} but has different options.`
+      );
+      return false;
+    }
+
     const name = await db.collection(collection).createIndex(keys, options);
     console.log(`OK   ${label} -> ${name}`);
     return true;
@@ -53,14 +55,8 @@ async function hasUniqueIndex(db, collection, field) {
 }
 
 async function run() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    console.error("MONGODB_URI must be set in .env");
-    process.exit(1);
-  }
-
-  await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
-  const db = mongoose.connection.db;
+  const { db, dbName } = await connect();
+  console.log(`Connected to database: ${dbName}`);
 
   const results = [];
 
@@ -127,7 +123,71 @@ async function run() {
     )
   );
 
-  await mongoose.disconnect();
+  // Orders — only the indexes used by real query paths.
+  results.push(
+    await createIndex(
+      db,
+      "orders",
+      { orderNo: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { orderNo: { $gt: "" } },
+        name: "uniq_order_no",
+      }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "orders",
+      { userId: 1, createdAt: -1 },
+      { name: "idx_orders_user_created" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "orders",
+      { discordId: 1, createdAt: -1 },
+      { name: "idx_orders_discord_created" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "orders",
+      { status: 1, createdAt: -1 },
+      { name: "idx_orders_status_created" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "orders",
+      { amountPaise: 1, status: 1, expiresAt: 1 },
+      { name: "idx_orders_amount_status_expiry" }
+    )
+  );
+
+  // Temporary audit logs expire after 7 days.
+  results.push(
+    await createIndex(
+      db,
+      "payment_logs",
+      { createdAt: 1 },
+      { expireAfterSeconds: 7 * 24 * 60 * 60, name: "ttl_payment_logs_7d" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "stock_logs",
+      { createdAt: 1 },
+      { expireAfterSeconds: 7 * 24 * 60 * 60, name: "ttl_stock_logs_7d" }
+    )
+  );
+
+  await disconnect();
 
   if (results.some((ok) => !ok)) {
     console.error(
@@ -141,6 +201,6 @@ async function run() {
 
 run().catch(async (err) => {
   console.error(`Index migration failed: ${err?.message || String(err)}`);
-  await mongoose.disconnect().catch(() => {});
+  await disconnect();
   process.exit(1);
 });

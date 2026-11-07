@@ -310,6 +310,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
             <ProductImage
               src={activeImage}
               alt={product.name}
+              width={1200}
               sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
               fallbackText={product.name}
@@ -355,6 +356,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                   <ProductImage
                     src={img}
                     alt=""
+                    width={200}
                     sizes="96px"
                     className="object-cover"
                     fallbackText={product.name}

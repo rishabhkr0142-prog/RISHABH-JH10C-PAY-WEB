@@ -17,7 +17,8 @@ export default async function AdminOverviewPage() {
     clientUserCount,
     legacyClientCount,
     orderCount,
-    allOrders,
+    orderStats,
+    recentOrderDocs,
     unclaimedPaymentsCount,
     totalPaymentsCount,
   ] = await Promise.all([
@@ -25,27 +26,55 @@ export default async function AdminOverviewPage() {
     User.countDocuments({ role: "client" }).catch(() => 0),
     Client.countDocuments().catch(() => 0),
     Order.countDocuments().catch(() => 0),
-    Order.find().sort({ createdAt: -1 }).lean().catch(() => []),
+    Order.aggregate([
+      {
+        $group: {
+          _id: null,
+          pending: { $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] } },
+          paid: { $sum: { $cond: [{ $eq: ["$status", "paid"] }, 1, 0] } },
+          completed: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+          },
+          cancelled: {
+            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
+          },
+          revenue: {
+            $sum: {
+              $cond: [
+                { $in: ["$status", ["completed", "paid"]] },
+                { $ifNull: ["$price", { $ifNull: ["$amount", 0] }] },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]).catch(() => []),
+    Order.find()
+      .select("orderNo productName customerName price amount amountPaise status createdAt utr")
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .lean()
+      .catch(() => []),
     Payment.countDocuments({ status: "unclaimed" }).catch(() => 0),
     Payment.countDocuments().catch(() => 0),
   ]);
 
   const totalClients = clientUserCount > 0 ? clientUserCount : legacyClientCount;
 
-  const revenue = allOrders
-    .filter((o) => o.status === "completed" || o.status === "paid")
-    .reduce((sum, o) => sum + (Number(o.price || o.amount) || 0), 0);
+  const statsRow = orderStats?.[0] || {};
+  const revenue = Number(statsRow.revenue) || 0;
 
-  const recentOrders = toPlainText(allOrders.slice(0, 6));
+  const recentOrders = toPlainText(recentOrderDocs);
 
   const statusCounts = {
-    pending: allOrders.filter((o) => o.status === "pending").length,
-    paid: allOrders.filter((o) => o.status === "paid").length,
-    completed: allOrders.filter((o) => o.status === "completed").length,
-    cancelled: allOrders.filter((o) => o.status === "cancelled").length,
+    pending: Number(statsRow.pending) || 0,
+    paid: Number(statsRow.paid) || 0,
+    completed: Number(statsRow.completed) || 0,
+    cancelled: Number(statsRow.cancelled) || 0,
   };
 
-  const totalCount = allOrders.length || 1;
+  const totalCount = orderCount || 1;
   const statusPercentages = {
     pending: Math.round((statusCounts.pending / totalCount) * 100),
     paid: Math.round((statusCounts.paid / totalCount) * 100),

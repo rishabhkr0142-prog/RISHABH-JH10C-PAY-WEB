@@ -25,6 +25,7 @@ export default function ProductForm({ product, onClose }) {
     price: product?.price ?? "",
     description: product?.description || "",
     imageUrl: product?.imageUrl || (product?.images && product.images[0]) || "",
+    imagePublicId: product?.imagePublicId || "",
     stock: product?.stock ?? 10,
     stockMode: product?.stockMode || "unlimited",
     outOfStock: product?.outOfStock ?? false,
@@ -167,6 +168,7 @@ export default function ProductForm({ product, onClose }) {
           .map((s) => s.trim())
           .filter(Boolean),
         images: form.imageUrl ? [form.imageUrl.trim()] : [],
+        imagePublicId: form.imagePublicId || "",
       };
 
       const res = await fetch(
@@ -646,7 +648,13 @@ export default function ProductForm({ product, onClose }) {
             <label className="label">Product Image</label>
             <ImageUploadField
               value={form.imageUrl}
-              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+              onChange={(url, publicId) =>
+                setForm((f) => ({
+                  ...f,
+                  imageUrl: url,
+                  imagePublicId: publicId || "",
+                }))
+              }
               folder="rishabh-jh10c/products"
               alt={form.name || "Product image preview"}
               fallbackText={form.name}

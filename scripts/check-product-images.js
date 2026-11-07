@@ -10,6 +10,7 @@
  */
 
 const mongoose = require("mongoose");
+const { resolveDbName } = require("./lib/db");
 const fs = require("fs");
 const path = require("path");
 
@@ -109,7 +110,10 @@ async function probe(url) {
 }
 
 async function main() {
-  await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+  await mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 10000,
+    dbName: resolveDbName(MONGODB_URI),
+  });
   const products = await Product.find({}).lean();
   console.log(`Found ${products.length} product(s).\n`);
 

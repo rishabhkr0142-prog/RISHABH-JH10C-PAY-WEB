@@ -4,7 +4,10 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
-import { normalizeImageUrl } from "@/lib/image-url";
+import {
+  cloudinaryPublicIdFromUrl,
+  normalizeImageUrl,
+} from "@/lib/image-url";
 import {
   parseProductDeliveryInput,
   parseProductPlans,
@@ -128,6 +131,9 @@ export async function POST(request) {
     }
 
     const mainImageUrl = parsedImages[0] || "";
+    const mainImagePublicId =
+      String(body?.imagePublicId || "").trim() ||
+      cloudinaryPublicIdFromUrl(mainImageUrl);
 
     // Parse duration plans, including optional plan-level delivery overrides.
     const parsedPlans = parseProductPlans(plans);
@@ -150,6 +156,8 @@ export async function POST(request) {
       category: String(category).trim() || "General",
       images: parsedImages,
       imageUrl: mainImageUrl,
+      imagePublicId: mainImagePublicId,
+      imagePublicIds: mainImagePublicId ? [mainImagePublicId] : [],
       features: parsedFeatures,
       stock: stockFields.stock,
       stockMode: stockFields.stockMode,

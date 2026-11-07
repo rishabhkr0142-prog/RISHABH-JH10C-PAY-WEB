@@ -15,6 +15,8 @@ export const metadata = {
   description: "Manage your purchases, order history, and account profile.",
 };
 
+const PAGE_SIZE = 50;
+
 export default async function DashboardPage({ searchParams }) {
   const session = await getSession();
 
@@ -25,6 +27,8 @@ export default async function DashboardPage({ searchParams }) {
 
   let dbUser = null;
   let orders = [];
+  let stats = { totalOrders: 0, pendingOrders: 0, completedOrders: 0, totalSpent: 0 };
+  let pagination = { page: 1, totalPages: 1, total: 0 };
 
   try {
     await connectDB();
@@ -35,10 +39,57 @@ export default async function DashboardPage({ searchParams }) {
       dbUser = userDoc?.toObject ? userDoc.toObject() : userDoc;
     }
 
-    // 2. Fetch orders strictly belonging to this logged-in Discord account
-    const orderDocs = await Order.find(ownerFilterFor(session, dbUser))
-      .populate("product")
+    const requested = Number(searchParams?.page);
+    const page = Number.isFinite(requested) && requested >= 1 ? Math.floor(requested) : 1;
+    const ownerFilter = ownerFilterFor(session, dbUser) || {};
+
+    // 2. Compute exact stats with aggregation (never load every order).
+    const [statRow] = await Order.aggregate([
+      { $match: ownerFilter },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          pendingOrders: {
+            $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
+          },
+          completedOrders: {
+            $sum: {
+              $cond: [{ $in: ["$status", ["completed", "paid"]] }, 1, 0],
+            },
+          },
+          totalSpent: {
+            $sum: {
+              $cond: [
+                { $in: ["$status", ["completed", "paid"]] },
+                { $ifNull: ["$price", { $ifNull: ["$amount", 0] }] },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const total = Number(statRow?.totalOrders) || 0;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const safePage = Math.min(page, totalPages);
+
+    stats = {
+      totalOrders: total,
+      pendingOrders: Number(statRow?.pendingOrders) || 0,
+      completedOrders: Number(statRow?.completedOrders) || 0,
+      totalSpent: Number(statRow?.totalSpent) || 0,
+    };
+    pagination = { page: safePage, totalPages, total };
+
+    // 3. Fetch only the current page, with a projection that drops heavy fields.
+    const orderDocs = await Order.find(ownerFilter)
+      .select("-stockReservation -stockError -licenseAttempts -deliveryAttempts")
+      .populate("product", "name slug images imageUrl price")
       .sort({ createdAt: -1 })
+      .skip((safePage - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE)
       .lean();
 
     orders = toPlainText(orderDocs).map((order) =>
@@ -51,21 +102,6 @@ export default async function DashboardPage({ searchParams }) {
     console.error("Dashboard data load error:", err?.message || err);
   }
 
-  // 3. Compute stats
-  const totalOrders = orders.length;
-  const pendingOrders = orders.filter((o) => o.status === "pending").length;
-  const completedOrders = orders.filter((o) => o.status === "completed" || o.status === "paid").length;
-  const totalSpent = orders
-    .filter((o) => o.status === "completed" || o.status === "paid")
-    .reduce((sum, o) => sum + (Number(o.price || o.amount) || 0), 0);
-
-  const stats = {
-    totalOrders,
-    pendingOrders,
-    completedOrders,
-    totalSpent,
-  };
-
   const initialTab = searchParams?.tab || "overview";
   const linked = typeof searchParams?.linked === "string" ? searchParams.linked : "";
   const linkError =
@@ -77,6 +113,7 @@ export default async function DashboardPage({ searchParams }) {
       dbUser={dbUser}
       orders={orders}
       stats={stats}
+      pagination={pagination}
       initialTab={initialTab}
       linked={linked}
       linkError={linkError}

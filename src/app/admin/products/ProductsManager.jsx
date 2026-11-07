@@ -189,6 +189,7 @@ export default function ProductsManager({ products = [] }) {
                             <ProductImage
                               src={imageSrc}
                               alt={p.name}
+                              width={100}
                               sizes="40px"
                               className="object-cover"
                               fallbackText={p.name}

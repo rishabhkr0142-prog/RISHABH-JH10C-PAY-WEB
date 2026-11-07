@@ -18,6 +18,15 @@ export async function GET(request) {
     await connectDB();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const requestedPage = Number(searchParams.get("page"));
+    const requestedLimit = Number(searchParams.get("limit"));
+    const page =
+      Number.isFinite(requestedPage) && requestedPage >= 1
+        ? Math.floor(requestedPage)
+        : 1;
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(200, Math.max(1, Math.floor(requestedLimit)))
+      : 100;
 
     const query = {};
     if (
@@ -27,14 +36,23 @@ export async function GET(request) {
       query.status = status;
     }
 
+    const total = await Payment.countDocuments(query);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+
     const payments = await Payment.find(query)
-      .populate("orderId")
+      .select(
+        "utr txnId amountPaise payerUpi paidAt status archived deletedAt orderId receivedAt createdAt"
+      )
       .sort({ receivedAt: -1 })
+      .skip((safePage - 1) * limit)
+      .limit(limit)
       .lean();
 
     return NextResponse.json({
       ok: true,
       payments: toPlainText(payments),
+      pagination: { page: safePage, limit, total, totalPages },
     });
   } catch (err) {
     console.error("GET /api/admin/payments failed:", err);

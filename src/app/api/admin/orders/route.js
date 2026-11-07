@@ -8,6 +8,7 @@ import User from "@/models/User";
 import { isRealDiscordId } from "@/lib/account";
 import { incrementStat } from "@/lib/stats";
 import { normalizeProductKey } from "@/lib/product-keys";
+import { generateOrderNo } from "@/lib/order-number";
 import {
   normalizeDeliveryType,
   resolveDeliveryContent,
@@ -93,6 +94,7 @@ export async function POST(request) {
       : null;
 
     const order = await Order.create({
+      orderNo: generateOrderNo(),
       customerName: String(customerName || "Guest").trim(),
       email: String(email || "").trim(),
       userId: buyer ? String(buyer._id) : cleanDiscordId,

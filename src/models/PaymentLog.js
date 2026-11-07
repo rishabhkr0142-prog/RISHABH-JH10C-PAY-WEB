@@ -28,7 +28,11 @@ const PaymentLogSchema = new mongoose.Schema(
   { timestamps: true, collection: "payment_logs" }
 );
 
-PaymentLogSchema.index({ createdAt: -1 });
+// Audit logs are temporary: MongoDB removes them automatically after 7 days.
+PaymentLogSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 7 * 24 * 60 * 60, name: "ttl_payment_logs_7d" }
+);
 PaymentLogSchema.index({ action: 1, createdAt: -1 });
 
 export default mongoose.models.PaymentLog ||

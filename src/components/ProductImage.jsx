@@ -2,17 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { isRenderableImageUrl } from "@/lib/image-url";
+import { cloudinaryImageUrl, isRenderableImageUrl } from "@/lib/image-url";
 
 export default function ProductImage({
   src,
   alt,
   sizes = "100vw",
+  width = 1200,
   priority = false,
   className = "",
   fallbackText,
 }) {
   const usable = isRenderableImageUrl(src);
+  const displaySrc = usable ? cloudinaryImageUrl(src, { width }) : "";
   const [failed, setFailed] = useState(!usable);
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function ProductImage({
 
   return (
     <Image
-      src={src.trim()}
+      src={displaySrc}
       alt={alt || ""}
       fill
       sizes={sizes}

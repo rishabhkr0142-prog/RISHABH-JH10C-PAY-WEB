@@ -85,6 +85,10 @@ const ProductSchema = new mongoose.Schema(
     },
     // Backward-compatible single image URL
     imageUrl: { type: String, default: "" },
+    // Cloudinary public_id(s) used to delete uploaded files when the product
+    // is removed or its image is replaced. Never stores image bytes/base64.
+    imagePublicId: { type: String, default: "", trim: true },
+    imagePublicIds: { type: [String], default: [] },
     features: {
       type: [String],
       default: [],

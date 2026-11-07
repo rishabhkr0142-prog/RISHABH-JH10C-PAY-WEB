@@ -4,7 +4,11 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Product from "@/models/Product";
 import { PRODUCT_KEYS, normalizeProductKey } from "@/lib/product-keys";
-import { normalizeImageUrl } from "@/lib/image-url";
+import {
+  cloudinaryPublicIdFromUrl,
+  normalizeImageUrl,
+} from "@/lib/image-url";
+import { deleteImageSafe } from "@/lib/cloudinary";
 import {
   parseProductDeliveryInput,
   parseProductPlans,
@@ -26,6 +30,28 @@ function slugify(text) {
     .replace(/[^\w\s-]/g, "")
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/** Collect every Cloudinary public_id belonging to a product document. */
+function productPublicIds(doc) {
+  if (!doc) return [];
+  const ids = new Set();
+
+  for (const value of [doc.imagePublicId, ...(doc.imagePublicIds || [])]) {
+    const id = String(value || "").trim();
+    if (id) ids.add(id);
+  }
+
+  const urls = [
+    ...(Array.isArray(doc.images) ? doc.images : []),
+    ...(doc.imageUrl ? [doc.imageUrl] : []),
+  ];
+  for (const url of urls) {
+    const id = cloudinaryPublicIdFromUrl(url);
+    if (id) ids.add(id);
+  }
+
+  return [...ids];
 }
 
 function alertThresholdValue() {
@@ -54,6 +80,7 @@ export async function PUT(request, { params }) {
     }
 
     const adminId = guard.session?.user?.id || "";
+    const previousPublicIds = productPublicIds(current);
     const updates = {};
     let productStockChange = null;
     let productOutOfStockChange = null;
@@ -217,6 +244,12 @@ export async function PUT(request, { params }) {
         );
       }
       updates.imageUrl = url;
+      updates.imagePublicId =
+        String(body?.imagePublicId || "").trim() ||
+        cloudinaryPublicIdFromUrl(url);
+      updates.imagePublicIds = updates.imagePublicId
+        ? [updates.imagePublicId]
+        : [];
       if (url && (!body.images || body.images.length === 0)) {
         updates.images = [url];
       }
@@ -244,6 +277,13 @@ export async function PUT(request, { params }) {
       updates.images = parsedImages;
       if (parsedImages.length > 0 && !updates.imageUrl) {
         updates.imageUrl = parsedImages[0];
+      }
+      if (body?.imageUrl === undefined) {
+        const derivedId = cloudinaryPublicIdFromUrl(parsedImages[0] || "");
+        if (derivedId) {
+          updates.imagePublicId = derivedId;
+          updates.imagePublicIds = [derivedId];
+        }
       }
     }
 
@@ -341,6 +381,14 @@ export async function PUT(request, { params }) {
 
     if (!product) {
       return NextResponse.json({ error: "Product not found." }, { status: 404 });
+    }
+
+    const nextPublicIds = productPublicIds(product);
+    const stalePublicIds = previousPublicIds.filter(
+      (id) => !nextPublicIds.includes(id)
+    );
+    if (stalePublicIds.length > 0) {
+      await Promise.all(stalePublicIds.map((id) => deleteImageSafe(id)));
     }
 
     if (productStockChange) {
@@ -488,6 +536,12 @@ export async function DELETE(request, { params }) {
     }
 
     await ProductStockItem.deleteMany({ productId: id });
+
+    // Remove uploaded images from Cloudinary too (DB only stores URLs/ids).
+    const publicIds = productPublicIds(deleted);
+    if (publicIds.length > 0) {
+      await Promise.all(publicIds.map((publicId) => deleteImageSafe(publicId)));
+    }
 
     revalidatePath("/");
     revalidatePath("/products");

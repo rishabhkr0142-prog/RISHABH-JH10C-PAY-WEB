@@ -3,21 +3,40 @@ import User from "@/models/User";
 import { linkedDiscordId, linkedGoogleSub } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { timeAgo } from "@/lib/format";
+import AdminPagination from "@/components/AdminPagination";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Users Directory | Admin" };
 
-export default async function AdminUsersPage() {
+const PAGE_SIZE = 100;
+
+export default async function AdminUsersPage({ searchParams }) {
   await connectDB();
-  const users = toPlainText(await User.find().sort({ createdAt: -1 }).lean());
+
+  const requested = Number(searchParams?.page);
+  const page = Number.isFinite(requested) && requested >= 1 ? Math.floor(requested) : 1;
+  const total = await User.countDocuments().catch(() => 0);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  const users = toPlainText(
+    await User.find()
+      .select(
+        "discordId username avatar email role createdAt authProviders.discord.id authProviders.google.sub authProviders.google.email"
+      )
+      .sort({ createdAt: -1 })
+      .skip((safePage - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE)
+      .lean()
+  );
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white">Registered Users Directory</h2>
         <p className="mt-1 text-xs text-neutral-400">
-          {users.length} member{users.length === 1 ? "" : "s"} authenticated through Google or Discord.
+          {total} member{total === 1 ? "" : "s"} authenticated through Google or Discord.
         </p>
       </div>
 
@@ -92,6 +111,14 @@ export default async function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      <AdminPagination
+        basePath="/admin/users"
+        page={safePage}
+        totalPages={totalPages}
+        total={total}
+        label="users"
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@
  */
 
 const mongoose = require("mongoose");
+const { resolveDbName } = require("./lib/db");
 const fs = require("fs");
 const path = require("path");
 
@@ -227,6 +228,7 @@ async function runSeed() {
   await mongoose.connect(MONGODB_URI, {
     bufferCommands: false,
     serverSelectionTimeoutMS: 10000,
+    dbName: resolveDbName(MONGODB_URI),
   });
 
   console.log("🔍 Checking existing products in MongoDB...");

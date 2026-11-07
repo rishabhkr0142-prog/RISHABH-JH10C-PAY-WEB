@@ -10,6 +10,7 @@
  */
 
 const mongoose = require("mongoose");
+const { resolveDbName } = require("./lib/db");
 const fs = require("fs");
 const path = require("path");
 
@@ -52,6 +53,7 @@ async function run() {
   await mongoose.connect(MONGODB_URI, {
     bufferCommands: false,
     serverSelectionTimeoutMS: 10000,
+    dbName: resolveDbName(MONGODB_URI),
   });
 
   const ordersCollection = mongoose.connection.collection("orders");

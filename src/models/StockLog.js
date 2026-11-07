@@ -54,6 +54,11 @@ const StockLogSchema = new mongoose.Schema(
 
 StockLogSchema.index({ productId: 1, createdAt: -1 });
 StockLogSchema.index({ orderId: 1, createdAt: -1 });
+// Inventory audit logs are kept for 7 days only, then MongoDB expires them.
+StockLogSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 7 * 24 * 60 * 60, name: "ttl_stock_logs_7d" }
+);
 
 export default mongoose.models.StockLog ||
   mongoose.model("StockLog", StockLogSchema);

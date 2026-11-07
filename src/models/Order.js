@@ -38,28 +38,30 @@ const StockReservationSchema = new mongoose.Schema(
 
 const OrderSchema = new mongoose.Schema(
   {
+    // Human-friendly unique order reference (e.g. ORD-20261107-A1B2C3).
+    orderNo: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     // Buyer account id (Mongo User._id for new orders, legacy Discord ID for old ones)
     userId: {
       type: String,
       default: "",
-      index: true,
     },
     // Reference to User document
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      index: true,
     },
     // Product reference
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      index: true,
     },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      index: true,
     },
     // Duration plan reference or identifier (e.g. "plan-30d", "Lifetime", etc.)
     planId: {
@@ -73,7 +75,6 @@ const OrderSchema = new mongoose.Schema(
       required: true,
       min: 0,
       default: 0,
-      index: true,
     },
     // Backward-compatible rupee fields (synced with amountPaise)
     price: {
@@ -91,27 +92,23 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       enum: ORDER_STATUSES,
       default: "pending",
-      index: true,
     },
     // Payment window expiration (defaults to 15 minutes from creation)
     expiresAt: {
       type: Date,
       default: () => new Date(Date.now() + 15 * 60 * 1000),
-      index: true,
     },
     // Verified 12-digit UPI UTR reference
     utr: {
       type: String,
       default: "",
       trim: true,
-      index: true,
     },
     // Reference to claimed Payment document
     paymentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Payment",
       default: null,
-      index: true,
     },
     // Timestamp when payment was confirmed
     paidAt: {
@@ -130,8 +127,8 @@ const OrderSchema = new mongoose.Schema(
     originalPrice: { type: Number, default: 0, min: 0 },
     // Buyer details snapshot for resilience
     customerName: { type: String, default: "Guest" },
-    email: { type: String, default: "", index: true },
-    discordId: { type: String, default: "", index: true },
+    email: { type: String, default: "" },
+    discordId: { type: String, default: "" },
     productName: { type: String, default: "" },
     // Snapshot of the product's license app key: "uid" or "lib".
     productKey: {
@@ -139,14 +136,12 @@ const OrderSchema = new mongoose.Schema(
       default: "",
       trim: true,
       lowercase: true,
-      index: true,
     },
     // Snapshot of how this order is fulfilled: "license" or "content".
     deliveryType: {
       type: String,
       enum: ["license", "content"],
       default: "license",
-      index: true,
     },
     // Immutable content snapshot created only after payment is verified.
     deliveryContent: {
@@ -157,14 +152,14 @@ const OrderSchema = new mongoose.Schema(
     // Stock reservation lifecycle. A unit is reserved while the order is
     // waiting for payment, then committed after the payment is verified.
     // Released units are returned exactly once (flags make this idempotent).
-    stockReserved: { type: Boolean, default: false, index: true },
-    stockCommitted: { type: Boolean, default: false, index: true },
+    stockReserved: { type: Boolean, default: false },
+    stockCommitted: { type: Boolean, default: false },
     stockReleased: { type: Boolean, default: false },
     stockReservation: {
       type: StockReservationSchema,
       default: undefined,
     },
-    stockReservationExpiresAt: { type: Date, default: null, index: true },
+    stockReservationExpiresAt: { type: Date, default: null },
     stockError: { type: String, default: "" },
     notes: { type: String, default: "" },
     // License delivery (one order = one key, generated server-side only)
@@ -182,7 +177,7 @@ const OrderSchema = new mongoose.Schema(
     dmSentAt: { type: Date, default: null },
     dmLastResentAt: { type: Date, default: null },
     // Discord sale webhook notification
-    saleNotified: { type: Boolean, default: false, index: true },
+    saleNotified: { type: Boolean, default: false },
     notifiedAt: { type: Date, default: null },
     notifyError: { type: String, default: "" },
   },
@@ -190,10 +185,23 @@ const OrderSchema = new mongoose.Schema(
 );
 
 // Compound indexes for the hot query paths (owner dashboard, webhook matching).
-OrderSchema.index({ discordId: 1, createdAt: -1 });
-OrderSchema.index({ userId: 1, createdAt: -1 });
-OrderSchema.index({ status: 1, createdAt: -1 });
-OrderSchema.index({ amountPaise: 1, status: 1, expiresAt: 1 });
+// Unique human-friendly order reference. Partial so legacy orders without a
+// value do not collide with each other.
+OrderSchema.index(
+  { orderNo: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { orderNo: { $gt: "" } },
+    name: "uniq_order_no",
+  }
+);
+OrderSchema.index({ discordId: 1, createdAt: -1 }, { name: "idx_orders_discord_created" });
+OrderSchema.index({ userId: 1, createdAt: -1 }, { name: "idx_orders_user_created" });
+OrderSchema.index({ status: 1, createdAt: -1 }, { name: "idx_orders_status_created" });
+OrderSchema.index(
+  { amountPaise: 1, status: 1, expiresAt: 1 },
+  { name: "idx_orders_amount_status_expiry" }
+);
 
 // Pre-save hook: sync amountPaise <-> price
 OrderSchema.pre("save", function (next) {

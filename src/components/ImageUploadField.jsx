@@ -3,22 +3,20 @@
 import { useRef, useState } from "react";
 import ProductImage from "@/components/ProductImage";
 
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024;
 const ACCEPTED_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
-  "image/gif",
-  "image/avif",
 ];
 
 function validateFile(file) {
   if (!file) return "Please choose an image file.";
   if (!ACCEPTED_TYPES.includes(file.type)) {
-    return "Unsupported file type. Use JPG, PNG, WEBP, GIF or AVIF.";
+    return "Unsupported file type. Use JPG, PNG or WEBP.";
   }
   if (file.size > MAX_BYTES) {
-    return "Image is too large. Maximum size is 5 MB.";
+    return "Image is too large. Maximum size is 2 MB.";
   }
   return "";
 }
@@ -144,6 +142,7 @@ export default function ImageUploadField({
           <ProductImage
             src={value}
             alt={alt || "Image preview"}
+            width={320}
             sizes="160px"
             fallbackText={fallbackText || alt}
           />
@@ -183,8 +182,8 @@ export default function ImageUploadField({
               : dragActive
               ? "Drop image to upload"
               : value
-              ? "Replace image (max 5 MB)"
-              : "Upload image or drag & drop (max 5 MB)"}
+              ? "Replace image (max 2 MB)"
+              : "Upload image or drag & drop (max 2 MB)"}
             <input
               ref={inputRef}
               type="file"

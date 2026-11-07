@@ -13,6 +13,7 @@ import { getSetting } from "@/lib/settings";
 import { getCouponOffer } from "@/lib/offers";
 import { calculateDiscount } from "@/lib/offer-utils";
 import { normalizeProductKey } from "@/lib/product-keys";
+import { generateOrderNo } from "@/lib/order-number";
 import {
   normalizeDeliveryType,
   resolveDeliveryContent,
@@ -427,6 +428,7 @@ export async function createOrder({
     try {
       order = await Order.create({
         _id: orderId,
+        orderNo: generateOrderNo(),
         userId: accountUserId,
         user: userDoc._id,
         productId: product._id,

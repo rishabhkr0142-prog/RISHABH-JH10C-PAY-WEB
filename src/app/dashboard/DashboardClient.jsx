@@ -31,6 +31,7 @@ export default function DashboardClient({
   dbUser,
   orders = [],
   stats = { totalOrders: 0, pendingOrders: 0, completedOrders: 0, totalSpent: 0 },
+  pagination = { page: 1, totalPages: 1, total: 0 },
   initialTab = "overview",
   linked = "",
   linkError = "",
@@ -1262,6 +1263,43 @@ export default function DashboardClient({
                   </tbody>
                 </table>
               </div>
+
+              {pagination.totalPages > 1 &&
+                !orderSearch &&
+                statusFilter === "all" && (
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-theme-border/50 pt-4 text-xs">
+                    <p className="text-[11px] text-neutral-500">
+                      {pagination.total} orders · page {pagination.page} of{" "}
+                      {pagination.totalPages}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {pagination.page > 1 ? (
+                        <Link
+                          href={`/dashboard?tab=orders&page=${pagination.page - 1}`}
+                          className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-neutral-300 transition hover:border-white/30 hover:text-white"
+                        >
+                          Previous
+                        </Link>
+                      ) : (
+                        <span className="rounded-lg border border-white/5 px-3 py-1.5 font-semibold text-neutral-600">
+                          Previous
+                        </span>
+                      )}
+                      {pagination.page < pagination.totalPages ? (
+                        <Link
+                          href={`/dashboard?tab=orders&page=${pagination.page + 1}`}
+                          className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-neutral-300 transition hover:border-white/30 hover:text-white"
+                        >
+                          Next
+                        </Link>
+                      ) : (
+                        <span className="rounded-lg border border-white/5 px-3 py-1.5 font-semibold text-neutral-600">
+                          Next
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

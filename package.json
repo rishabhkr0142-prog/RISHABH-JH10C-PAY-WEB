@@ -14,7 +14,11 @@
     "check:images": "node scripts/check-product-images.js",
     "migrate:stock": "node scripts/migrate-stock-unlimited.js",
     "migrate:sale-notifications": "node scripts/migrate-sale-notifications.js",
+    "migrate:images": "node scripts/migrate-image-data.js",
+    "migrate:db": "node scripts/migrate-db-name.js",
     "db:indexes": "node scripts/ensure-indexes.js",
+    "db:report": "node scripts/db-report.js",
+    "db:cleanup": "node scripts/cleanup.js",
     "test:idempotency": "node scripts/test-idempotency.mjs"
   },
   "dependencies": {

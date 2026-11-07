@@ -5,14 +5,8 @@ import { uploadImage } from "@/lib/cloudinary";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BYTES = 5 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-]);
+const MAX_BYTES = 2 * 1024 * 1024;
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const DEFAULT_FOLDER = "rishabh-jh10c/products";
 const ALLOWED_FOLDERS = new Set([DEFAULT_FOLDER, "rishabh-jh10c/offers"]);
@@ -37,23 +31,9 @@ function detectImageType(buffer) {
     return "image/png";
   }
 
-  if (
-    buffer[0] === 0x47 &&
-    buffer[1] === 0x49 &&
-    buffer[2] === 0x46 &&
-    buffer[3] === 0x38
-  ) {
-    return "image/gif";
-  }
-
   const header = buffer.subarray(0, 12).toString("ascii");
   if (header.startsWith("RIFF") && header.slice(8, 12) === "WEBP") {
     return "image/webp";
-  }
-
-  if (header.slice(4, 8) === "ftyp") {
-    const brand = header.slice(8, 12);
-    if (brand === "avif" || brand === "avis") return "image/avif";
   }
 
   return "";
@@ -78,14 +58,14 @@ export async function POST(request) {
 
     if (!ALLOWED_TYPES.has(file.type)) {
       return NextResponse.json(
-        { error: "Unsupported file type. Use JPG, PNG, WEBP, GIF or AVIF." },
+        { error: "Unsupported file type. Use JPG, PNG or WEBP." },
         { status: 400 }
       );
     }
 
     if (file.size > MAX_BYTES) {
       return NextResponse.json(
-        { error: "Image is too large. Maximum size is 5 MB." },
+        { error: "Image is too large. Maximum size is 2 MB." },
         { status: 400 }
       );
     }
@@ -95,7 +75,7 @@ export async function POST(request) {
     const detectedType = detectImageType(buffer);
     if (!detectedType || !ALLOWED_TYPES.has(detectedType)) {
       return NextResponse.json(
-        { error: "The file does not look like a valid JPG, PNG, WEBP, GIF or AVIF image." },
+        { error: "The file does not look like a valid JPG, PNG or WEBP image." },
         { status: 400 }
       );
     }

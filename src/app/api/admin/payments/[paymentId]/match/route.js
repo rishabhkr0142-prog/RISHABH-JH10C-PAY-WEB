@@ -6,7 +6,7 @@ import Payment from "@/models/Payment";
 import Order from "@/models/Order";
 import { markOrderBuyerAsClient } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
-import { completeOrder } from "@/lib/fulfillment";
+import { finalizePaidOrder } from "@/lib/reseller-order";
 import { ensureStockForPayment } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
@@ -155,11 +155,11 @@ export async function POST(request, { params }) {
       console.error("Metric increment failed:", statErr);
     }
 
-    // Automatic license delivery (idempotent, one key per order).
+    // Automatic license/content delivery (idempotent, one per order).
     let deliveredOrder = updatedOrder;
     try {
-      const fulfillment = await completeOrder(updatedOrder._id);
-      if (fulfillment?.order) deliveredOrder = fulfillment.order;
+      const fulfillment = await finalizePaidOrder(updatedOrder);
+      if (fulfillment) deliveredOrder = fulfillment;
     } catch (fulfillmentErr) {
       console.error(
         "License fulfillment failed after manual payment match:",
@@ -169,7 +169,9 @@ export async function POST(request, { params }) {
 
     revalidatePath(`/checkout/${order._id}`);
     revalidatePath("/dashboard");
+    revalidatePath("/reseller");
     revalidatePath("/admin/orders");
+    revalidatePath("/admin/resellers");
     revalidatePath("/admin");
 
     return NextResponse.json({

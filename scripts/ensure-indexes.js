@@ -123,6 +123,16 @@ async function run() {
     )
   );
 
+  // Users — reseller lookups for admin lists and pricing checks.
+  results.push(
+    await createIndex(
+      db,
+      "users",
+      { isReseller: 1 },
+      { name: "idx_users_is_reseller" }
+    )
+  );
+
   // Orders — only the indexes used by real query paths.
   results.push(
     await createIndex(
@@ -166,6 +176,14 @@ async function run() {
       "orders",
       { amountPaise: 1, status: 1, expiresAt: 1 },
       { name: "idx_orders_amount_status_expiry" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "orders",
+      { orderType: 1, status: 1, expiresAt: 1 },
+      { name: "idx_orders_type_status_expiry" }
     )
   );
 

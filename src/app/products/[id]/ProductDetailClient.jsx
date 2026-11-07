@@ -9,15 +9,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
 import { calculateDiscount } from "@/lib/offer-utils";
 import {
+  isLicenseProduct,
+  resellerDiscountAmount,
+} from "@/lib/reseller";
+import {
   getPlanStockInfo,
   getStockBadge,
   pickDefaultPlan,
 } from "@/lib/stock";
 import { DiscordIcon } from "@/components/Navbar";
+import useResellerStatus from "@/components/useResellerStatus";
 
 export default function ProductDetailClient({ product, initialCouponCode = "" }) {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const isReseller = useResellerStatus();
 
   const allImages =
     product.images && product.images.length > 0
@@ -47,7 +53,17 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const couponDiscount = appliedCoupon ? calculateDiscount(currentPrice, appliedCoupon) : 0;
-  const finalPrice = Math.max(0, Math.round((currentPrice - couponDiscount) * 100) / 100);
+  const resellerEligible = isReseller && isLicenseProduct(product);
+  const resellerDiscount = resellerEligible
+    ? resellerDiscountAmount(currentPrice)
+    : 0;
+  const useResellerDiscount =
+    resellerDiscount > 0 && resellerDiscount >= couponDiscount;
+  const bestDiscount = Math.max(couponDiscount, resellerDiscount);
+  const finalPrice = Math.max(
+    0,
+    Math.round((currentPrice - bestDiscount) * 100) / 100
+  );
 
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [cooldownChecked, setCooldownChecked] = useState(false);
@@ -392,7 +408,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
             >
               {formatPrice(finalPrice)}
             </span>
-            {couponDiscount > 0 && (
+            {bestDiscount > 0 && (
               <span className="font-mono text-lg text-neutral-500 line-through">
                 {formatPrice(currentPrice)}
               </span>
@@ -414,9 +430,20 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
               ? "Delivery details and link are shown after payment is verified."
               : "License key is delivered automatically after payment is verified."}
           </p>
-          {couponDiscount > 0 && (
+          {useResellerDiscount && (
+            <p className="mt-1 text-[11px] font-semibold text-emerald-400">
+              Reseller 50% OFF applied — you save {formatPrice(resellerDiscount)}
+            </p>
+          )}
+          {couponDiscount > 0 && !useResellerDiscount && (
             <p className="mt-1 text-[11px] font-semibold text-emerald-400">
               Coupon {appliedCoupon.code} applied — you save {formatPrice(couponDiscount)}
+            </p>
+          )}
+          {couponDiscount > 0 && useResellerDiscount && (
+            <p className="mt-1 text-[11px] text-neutral-400">
+              Reseller price is better than coupon {appliedCoupon.code} — the
+              reseller discount is applied.
             </p>
           )}
           {selectedStockInfo.inStock &&
@@ -451,6 +478,16 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                   const planStock = getPlanStockInfo(product, plan);
                   const planBadge = getStockBadge(planStock);
                   const planDisabled = !planStock.inStock;
+                  const planResellerDiscount =
+                    isReseller && isLicenseProduct(product)
+                      ? resellerDiscountAmount(plan.price)
+                      : 0;
+                  const planDisplayPrice = Math.max(
+                    0,
+                    Math.round(
+                      (Number(plan.price) - planResellerDiscount) * 100
+                    ) / 100
+                  );
 
                   return (
                     <button
@@ -512,8 +549,13 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
 
                       <div className="mt-3 border-t border-white/5 pt-2">
                         <span className="font-mono text-base font-extrabold text-white">
-                          {formatPrice(plan.price)}
+                          {formatPrice(planDisplayPrice)}
                         </span>
+                        {planResellerDiscount > 0 && (
+                          <span className="ml-2 font-mono text-[11px] text-neutral-500 line-through">
+                            {formatPrice(plan.price)}
+                          </span>
+                        )}
                       </div>
                     </button>
                   );

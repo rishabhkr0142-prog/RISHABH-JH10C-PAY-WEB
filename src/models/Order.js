@@ -49,6 +49,12 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // "product" for normal purchases, "reseller_membership" for the ₹149 plan.
+    orderType: {
+      type: String,
+      enum: ["product", "reseller_membership"],
+      default: "product",
+    },
     // Reference to User document
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -124,6 +130,9 @@ const OrderSchema = new mongoose.Schema(
     // Coupon redemption snapshot (if a code was applied)
     couponCode: { type: String, default: "", trim: true },
     couponDiscount: { type: Number, default: 0, min: 0 },
+    // Reseller discount snapshot (never stacked with a coupon discount).
+    resellerDiscount: { type: Number, default: 0, min: 0 },
+    resellerDiscountPercent: { type: Number, default: 0, min: 0 },
     originalPrice: { type: Number, default: 0, min: 0 },
     // Buyer details snapshot for resilience
     customerName: { type: String, default: "Guest" },
@@ -201,6 +210,10 @@ OrderSchema.index({ status: 1, createdAt: -1 }, { name: "idx_orders_status_creat
 OrderSchema.index(
   { amountPaise: 1, status: 1, expiresAt: 1 },
   { name: "idx_orders_amount_status_expiry" }
+);
+OrderSchema.index(
+  { orderType: 1, status: 1, expiresAt: 1 },
+  { name: "idx_orders_type_status_expiry" }
 );
 
 // Pre-save hook: sync amountPaise <-> price

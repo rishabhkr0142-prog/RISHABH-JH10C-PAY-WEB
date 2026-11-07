@@ -219,13 +219,17 @@ export default function CheckoutClient({
     const isPaid = order?.status === "paid" || order?.status === "completed";
     if (isPaid) {
       redirectTimerRef.current = setTimeout(() => {
-        router.push("/dashboard?tab=orders");
+        router.push(
+          order?.orderType === "reseller_membership"
+            ? "/reseller"
+            : "/dashboard?tab=orders"
+        );
       }, 4000);
     }
     return () => {
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     };
-  }, [order?.status, router]);
+  }, [order?.status, order?.orderType, router]);
 
   // Format mm:ss
   const formatTimer = (seconds) => {
@@ -243,6 +247,7 @@ export default function CheckoutClient({
   const isExpired = order?.status === "expired" || remainingSeconds <= 0;
   const isPaid = order?.status === "paid" || order?.status === "completed";
   const isCancelled = order?.status === "cancelled";
+  const isResellerOrder = order?.orderType === "reseller_membership";
 
   // Handle Instant UPI App Launch
   const handleLaunchApp = useCallback(
@@ -507,7 +512,7 @@ export default function CheckoutClient({
                 isPaid ? "text-white" : "text-neutral-500"
               }`}
             >
-              Delivery
+              {isResellerOrder ? "Activation" : "Delivery"}
             </span>
           </div>
         </div>
@@ -619,12 +624,16 @@ export default function CheckoutClient({
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-3xl text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.35)] animate-bounce">
               ✓
             </div>
-            <h2 className="mt-4 text-2xl font-black text-white">Payment Confirmed!</h2>
+            <h2 className="mt-4 text-2xl font-black text-white">
+              {isResellerOrder ? "Reseller Membership Activated!" : "Payment Confirmed!"}
+            </h2>
             <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-emerald-200/90">
-              Aapka payment verify ho gaya hai. Aapke credentials aur license key order dashboard mein available hain.
+              {isResellerOrder
+                ? "Aapka Reseller membership activate ho gaya hai. Ab sabhi License App products par 50% OFF automatically milega."
+                : "Aapka payment verify ho gaya hai. Aapke credentials aur license key order dashboard mein available hain."}
             </p>
             <p className="mt-2 text-[11px] font-medium text-emerald-300">
-              Redirecting to your orders dashboard in 3 seconds...
+              Redirecting to {isResellerOrder ? "the Reseller page" : "your orders dashboard"} in 3 seconds...
             </p>
 
             <div className="mx-auto mt-6 max-w-sm rounded-xl border border-emerald-500/25 bg-black/60 p-4 text-xs text-neutral-300 space-y-2 text-left">
@@ -647,9 +656,15 @@ export default function CheckoutClient({
             </div>
 
             <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
-              <Link href="/dashboard?tab=orders" className="btn-primary !py-2.5 !text-xs font-bold">
-                View in Dashboard Now →
-              </Link>
+              {isResellerOrder ? (
+                <Link href="/reseller" className="btn-primary !py-2.5 !text-xs font-bold">
+                  View Reseller Status →
+                </Link>
+              ) : (
+                <Link href="/dashboard?tab=orders" className="btn-primary !py-2.5 !text-xs font-bold">
+                  View in Dashboard Now →
+                </Link>
+              )}
               <a
                 href={discordInvite}
                 target="_blank"
@@ -952,6 +967,24 @@ export default function CheckoutClient({
                     <span className="text-neutral-400">Quantity:</span>
                     <span className="font-mono text-white">{order.quantity || 1} unit</span>
                   </div>
+
+                  {order.resellerDiscount > 0 && order.originalPrice > 0 && (
+                    <div className="flex justify-between pt-2.5 text-neutral-500">
+                      <span>Original Price:</span>
+                      <span className="font-mono line-through">
+                        {formatPrice(order.originalPrice)}
+                      </span>
+                    </div>
+                  )}
+
+                  {order.resellerDiscount > 0 && (
+                    <div className="flex justify-between pt-2.5 text-emerald-400">
+                      <span>Reseller 50% OFF:</span>
+                      <span className="font-mono font-semibold">
+                        -{formatPrice(order.resellerDiscount)}
+                      </span>
+                    </div>
+                  )}
 
                   {order.couponCode && (
                     <div className="flex justify-between pt-2.5 text-emerald-400">

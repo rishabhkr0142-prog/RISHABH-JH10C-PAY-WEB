@@ -11,7 +11,7 @@ import {
 import { toPlainText } from "@/lib/serialize";
 import { getSetting } from "@/lib/settings";
 import { getCouponOffer } from "@/lib/offers";
-import { calculateDiscount } from "@/lib/offer-utils";
+import { chooseBestDiscount } from "@/lib/reseller";
 import { normalizeProductKey } from "@/lib/product-keys";
 import { generateOrderNo } from "@/lib/order-number";
 import {
@@ -228,25 +228,37 @@ export async function createOrder({
 
     const basePrice = unitPrice * qty;
 
-    // 3b. Re-validate any coupon on the server and apply the discount
-    let couponDiscount = 0;
+    // 3b. Re-validate any coupon and pick the single best discount. Reseller
+    //     and coupon discounts never stack; the larger one wins.
     let appliedCoupon = null;
     const cleanCoupon = String(couponCode || "").trim();
+    let couponOffer = null;
     if (cleanCoupon) {
-      const couponOffer = await getCouponOffer(cleanCoupon, product._id);
-      if (couponOffer) {
-        couponDiscount = calculateDiscount(basePrice, couponOffer);
-        if (couponDiscount > 0) {
-          appliedCoupon = {
-            code: couponOffer.couponCode,
-            discount: couponDiscount,
-            label: couponOffer.discountLabel || "",
-          };
-        }
-      }
+      couponOffer = await getCouponOffer(cleanCoupon, product._id);
     }
 
-    const totalPrice = Math.round((basePrice - couponDiscount) * 100) / 100;
+    const pricing = chooseBestDiscount({
+      basePrice,
+      couponOffer,
+      isReseller: Boolean(userDoc.isReseller),
+      product,
+    });
+
+    if (
+      pricing.discountSource === "coupon" &&
+      pricing.couponDiscount > 0 &&
+      couponOffer
+    ) {
+      appliedCoupon = {
+        code: couponOffer.couponCode,
+        discount: pricing.couponDiscount,
+        label: couponOffer.discountLabel || "",
+      };
+    }
+
+    const resellerDiscount =
+      pricing.discountSource === "reseller" ? pricing.resellerDiscount : 0;
+    const totalPrice = pricing.finalPrice;
     const totalAmountPaise = Math.round(totalPrice * 100);
 
     const fampayUpiId =
@@ -318,6 +330,42 @@ export async function createOrder({
             },
           }
         );
+      }
+
+      const existingAmountPaise =
+        existingPendingOrder.amountPaise ||
+        Math.round((Number(existingPendingOrder.price) || 0) * 100);
+
+      // Keep the pending order in sync if the server-side price changed
+      // (e.g. the buyer became a reseller after creating the order).
+      if (existingAmountPaise !== totalAmountPaise) {
+        await Order.updateOne(
+          { _id: existingPendingOrder._id },
+          {
+            $set: {
+              amountPaise: totalAmountPaise,
+              price: totalPrice,
+              amount: totalPrice,
+              originalPrice: basePrice,
+              couponCode: appliedCoupon?.code || "",
+              couponDiscount: appliedCoupon ? pricing.couponDiscount : 0,
+              resellerDiscount,
+              resellerDiscountPercent:
+                resellerDiscount > 0 ? pricing.resellerPercent : 0,
+            },
+          }
+        );
+        existingPendingOrder.amountPaise = totalAmountPaise;
+        existingPendingOrder.price = totalPrice;
+        existingPendingOrder.amount = totalPrice;
+        existingPendingOrder.originalPrice = basePrice;
+        existingPendingOrder.couponCode = appliedCoupon?.code || "";
+        existingPendingOrder.couponDiscount = appliedCoupon
+          ? pricing.couponDiscount
+          : 0;
+        existingPendingOrder.resellerDiscount = resellerDiscount;
+        existingPendingOrder.resellerDiscountPercent =
+          resellerDiscount > 0 ? pricing.resellerPercent : 0;
       }
 
       const orderAmountPaise =
@@ -439,7 +487,10 @@ export async function createOrder({
         amount: totalPrice,
         originalPrice: basePrice,
         couponCode: appliedCoupon?.code || "",
-        couponDiscount: couponDiscount,
+        couponDiscount: appliedCoupon ? pricing.couponDiscount : 0,
+        resellerDiscount,
+        resellerDiscountPercent:
+          resellerDiscount > 0 ? pricing.resellerPercent : 0,
         status: "pending",
         expiresAt,
         productName: product.name,

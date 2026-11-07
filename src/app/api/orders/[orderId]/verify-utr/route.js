@@ -11,7 +11,7 @@ import {
 import { rateLimit } from "@/lib/rate-limit";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
-import { completeOrder } from "@/lib/fulfillment";
+import { finalizePaidOrder } from "@/lib/reseller-order";
 import {
   ensureStockForPayment,
   releaseProductStockReservation,
@@ -78,8 +78,8 @@ export async function POST(request, { params }) {
       let currentOrder = order;
       if (!order.licenseKey && order.status === "paid") {
         try {
-          const fulfillment = await completeOrder(order._id);
-          if (fulfillment?.order) currentOrder = fulfillment.order;
+          const fulfillment = await finalizePaidOrder(order);
+          if (fulfillment) currentOrder = fulfillment;
         } catch (fulfillmentErr) {
           console.error(
             "License fulfillment retry on already-paid order failed:",
@@ -287,11 +287,11 @@ export async function POST(request, { params }) {
       console.error("Metric update error:", metricErr);
     }
 
-    // Automatic license delivery (idempotent, one key per order).
+    // Automatic license/content delivery (idempotent, one delivery per order).
     let deliveredOrder = updatedOrder;
     try {
-      const fulfillment = await completeOrder(updatedOrder._id);
-      if (fulfillment?.order) deliveredOrder = fulfillment.order;
+      const fulfillment = await finalizePaidOrder(updatedOrder);
+      if (fulfillment) deliveredOrder = fulfillment;
     } catch (fulfillmentErr) {
       console.error(
         "License fulfillment failed after UTR verification:",
@@ -301,7 +301,9 @@ export async function POST(request, { params }) {
 
     revalidatePath(`/checkout/${order._id}`);
     revalidatePath("/dashboard");
+    revalidatePath("/reseller");
     revalidatePath("/admin/orders");
+    revalidatePath("/admin/resellers");
     revalidatePath("/admin");
 
     return NextResponse.json({

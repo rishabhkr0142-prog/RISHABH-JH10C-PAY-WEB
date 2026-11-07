@@ -46,6 +46,10 @@ const UserSchema = new mongoose.Schema(
     totalSpent: { type: Number, default: 0, min: 0 },
     // Last successful order creation — used for the atomic cooldown gate
     lastOrderAt: { type: Date, default: null },
+    // Lifetime reseller membership. Only license products receive the 50% discount.
+    isReseller: { type: Boolean, default: false, index: true },
+    resellerSince: { type: Date, default: null },
+    resellerOrderNo: { type: String, default: "", trim: true },
   },
   { timestamps: true, collection: "users" }
 );

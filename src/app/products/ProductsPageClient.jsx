@@ -5,11 +5,18 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice } from "@/lib/format";
 import { getProductStockInfo, getStockBadge } from "@/lib/stock";
+import {
+  isLicenseProduct,
+  resellerPrice,
+} from "@/lib/reseller";
 import ProductImage from "@/components/ProductImage";
+import ResellerBadge from "@/components/ResellerBadge";
+import useResellerStatus from "@/components/useResellerStatus";
 
 export default function ProductsPageClient({ initialProducts = [] }) {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const isReseller = useResellerStatus();
 
   const categories = useMemo(() => {
     const set = new Set();
@@ -62,6 +69,16 @@ export default function ProductsPageClient({ initialProducts = [] }) {
           Instant automated fulfillment with full replacement warranty.
         </p>
       </div>
+
+      {isReseller && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/15 bg-white/5 p-3.5 text-xs">
+          <span className="flex items-center gap-2 text-neutral-200">
+            <ResellerBadge />
+            Reseller pricing is active on License App products.
+          </span>
+          <span className="font-mono font-bold text-white">50% OFF</span>
+        </div>
+      )}
 
       {/* ── Sticky Top Bar: Search & Category Filter Pills ── */}
       <div className="sticky top-16 z-30 mt-10 rounded-xl border border-theme-border bg-theme-surface/90 p-4 shadow-xl backdrop-blur-md">
@@ -168,6 +185,12 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                   ? Math.min(...product.plans.map((p) => Number(p.price) || 0))
                   : Number(product.price) || 0;
 
+                const showResellerPrice =
+                  isReseller && isLicenseProduct(product) && minPrice > 0;
+                const displayPrice = showResellerPrice
+                  ? resellerPrice(minPrice)
+                  : minPrice;
+
                 return (
                   <motion.div
                     key={product._id}
@@ -271,8 +294,18 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                             {hasPlans ? "Starting from" : "Price"}
                           </span>
                           <p className="font-mono text-lg font-bold text-white">
-                            {formatPrice(minPrice)}
+                            {formatPrice(displayPrice)}
+                            {showResellerPrice && (
+                              <span className="ml-2 font-mono text-xs font-medium text-neutral-500 line-through">
+                                {formatPrice(minPrice)}
+                              </span>
+                            )}
                           </p>
+                          {showResellerPrice && (
+                            <span className="mt-1 inline-flex items-center rounded border border-white/20 bg-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                              Reseller 50% OFF
+                            </span>
+                          )}
                           {hasPlans && (
                             <span className="block text-[10px] text-neutral-400">
                               {product.plans.length} plan{product.plans.length > 1 ? "s" : ""} available

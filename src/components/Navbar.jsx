@@ -7,6 +7,8 @@ import { useSession, signOut } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { NavbarThemeToggle } from "./ThemeSwitcher";
 import BrandLogo from "./Logo";
+import ResellerBadge from "./ResellerBadge";
+import useResellerStatus from "./useResellerStatus";
 
 export function DiscordIcon({ className = "h-4 w-4" }) {
   return (
@@ -28,7 +30,7 @@ function Logo() {
 }
 
 /** Avatar + username dropdown menu */
-function UserMenu({ session }) {
+function UserMenu({ session, isReseller = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const router = useRouter();
@@ -82,6 +84,9 @@ function UserMenu({ session }) {
         <span className="hidden max-w-[110px] truncate text-xs font-medium text-white sm:inline">
           {name}
         </span>
+        {isReseller && (
+          <ResellerBadge className="hidden lg:inline-flex" />
+        )}
         {isAdmin && (
           <span className="hidden rounded border border-theme-border bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white lg:inline">
             Admin
@@ -109,6 +114,7 @@ function UserMenu({ session }) {
           >
             <div className="border-b border-theme-border/50 px-3 py-2">
               <p className="truncate text-xs font-semibold text-white">{name}</p>
+              {isReseller && <ResellerBadge className="mt-1" />}
               <p className="truncate text-[10px] text-neutral-400">
                 {session?.user?.email || "Store Account"}
               </p>
@@ -166,6 +172,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
+  const isReseller = useResellerStatus();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [offersCount, setOffersCount] = useState(0);
 
@@ -218,6 +225,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/products", label: "Products" },
+    { href: "/reseller", label: "Reseller" },
     { href: "/offers", label: "Offers", badge: offersCount },
     ...(status === "authenticated"
       ? [{ href: "/dashboard", label: "Dashboard" }]
@@ -266,7 +274,7 @@ export default function Navbar() {
           {status === "loading" ? (
             <div className="h-8 w-20 animate-pulse rounded-lg bg-white/5" />
           ) : status === "authenticated" ? (
-            <UserMenu session={session} />
+            <UserMenu session={session} isReseller={isReseller} />
           ) : (
             <Link
               href="/login"
@@ -354,6 +362,7 @@ export default function Navbar() {
                         <p className="truncate text-xs font-semibold text-white">
                           {session?.user?.name}
                         </p>
+                        {isReseller && <ResellerBadge className="mt-1" />}
                         <p className="truncate text-[10px] text-neutral-400">
                           {session?.user?.email || "Member"}
                         </p>

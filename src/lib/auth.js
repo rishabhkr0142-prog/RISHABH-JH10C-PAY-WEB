@@ -63,6 +63,7 @@ export const authOptions = {
         token.discordId = user.discordId || null;
         token.googleSub = user.googleSub || null;
         token.authProvider = user.authProvider || null;
+        token.isReseller = Boolean(user.isReseller);
       }
 
       // NextAuth may not forward custom fields mutated in signIn(), so resolve
@@ -93,6 +94,7 @@ export const authOptions = {
             token.discordId = linkedDiscordId(existing) || null;
             token.googleSub = linkedGoogleSub(existing) || null;
             token.authProvider = account.provider;
+            token.isReseller = Boolean(existing.isReseller);
           }
         } catch (err) {
           console.error("JWT account lookup failed:", err?.message || err);
@@ -113,6 +115,7 @@ export const authOptions = {
           if (existing) {
             token.dbId = String(existing._id);
             token.googleSub = linkedGoogleSub(existing) || null;
+            token.isReseller = Boolean(existing.isReseller);
           }
         } catch (err) {
           console.error("JWT legacy session lookup failed:", err?.message || err);
@@ -127,6 +130,7 @@ export const authOptions = {
           if (fresh) {
             token.discordId = linkedDiscordId(fresh) || null;
             token.googleSub = linkedGoogleSub(fresh) || null;
+            token.isReseller = Boolean(fresh.isReseller);
           }
         } catch (err) {
           console.error("JWT session refresh failed:", err?.message || err);
@@ -147,6 +151,7 @@ export const authOptions = {
         session.user.googleSub = token?.googleSub || "";
         session.user.authProvider = token?.authProvider || "";
         session.user.isAdmin = isUserAdmin(session);
+        session.user.isReseller = Boolean(token?.isReseller);
       }
       return session;
     },
@@ -241,6 +246,7 @@ async function signInWithDiscord({ user, account, profile }) {
     user.discordId = linkedDiscordId(saved) || "";
     user.googleSub = linkedGoogleSub(saved) || "";
     user.authProvider = "discord";
+    user.isReseller = Boolean(saved.isReseller);
   }
 
   return true;
@@ -313,6 +319,7 @@ async function signInWithGoogle({ user, account, profile }) {
     user.discordId = linkedDiscordId(saved) || "";
     user.googleSub = linkedGoogleSub(saved) || "";
     user.authProvider = "google";
+    user.isReseller = Boolean(saved.isReseller);
   }
 
   return true;

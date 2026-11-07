@@ -6,7 +6,7 @@ import Payment from "@/models/Payment";
 import Order from "@/models/Order";
 import Client from "@/models/Client";
 import { markOrderBuyerAsClient } from "@/lib/account";
-import { completeOrder } from "@/lib/fulfillment";
+import { finalizePaidOrder } from "@/lib/reseller-order";
 import { ensureStockForPayment } from "@/lib/product-stock";
 
 export const dynamic = "force-dynamic";
@@ -229,9 +229,9 @@ export async function POST(request) {
             console.error("Metric update error after payment match:", statErr);
           }
 
-          // Automatic license delivery (idempotent, one key per order).
+          // Automatic license/content delivery (idempotent, one per order).
           try {
-            await completeOrder(updatedOrder._id);
+            await finalizePaidOrder(updatedOrder);
           } catch (fulfillmentErr) {
             console.error(
               "License fulfillment failed after webhook match:",
@@ -241,7 +241,9 @@ export async function POST(request) {
 
           revalidatePath(`/checkout/${targetOrder._id}`);
           revalidatePath("/dashboard");
+          revalidatePath("/reseller");
           revalidatePath("/admin/orders");
+          revalidatePath("/admin/resellers");
           revalidatePath("/admin");
         } else {
           // Rollback the claim only if this request still owns it.

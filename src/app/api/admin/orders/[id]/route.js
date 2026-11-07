@@ -4,7 +4,8 @@ import { requireAdmin } from "@/lib/admin-guard";
 import connectDB from "@/lib/db";
 import Order, { ORDER_STATUSES } from "@/models/Order";
 import { decrementStat } from "@/lib/stats";
-import { completeOrder } from "@/lib/fulfillment";
+import { finalizePaidOrder, activateResellerForOrder } from "@/lib/reseller-order";
+import { RESELLER_ORDER_TYPE } from "@/lib/reseller";
 import {
   ensureStockForPayment,
   releaseProductStockItem,
@@ -64,8 +65,10 @@ export async function PATCH(request, { params }) {
     }
 
     const isContent = normalizeDeliveryType(current.deliveryType) === "content";
+    const isResellerOrder = current.orderType === RESELLER_ORDER_TYPE;
     if (
       body.status === "completed" &&
+      !isResellerOrder &&
       (isContent ? !current.deliveryContent : !current.licenseKey)
     ) {
       return NextResponse.json(
@@ -127,8 +130,8 @@ export async function PATCH(request, { params }) {
       !order.deliveryContent
     ) {
       try {
-        const fulfillment = await completeOrder(order._id);
-        if (fulfillment?.order) order = fulfillment.order;
+        const fulfillment = await finalizePaidOrder(order);
+        if (fulfillment) order = fulfillment;
       } catch (fulfillmentErr) {
         console.error(
           "Fulfillment failed after admin mark-paid:",
@@ -138,11 +141,16 @@ export async function PATCH(request, { params }) {
     }
 
     if (order.status === "completed") {
+      if (isResellerOrder) {
+        await activateResellerForOrder(order).catch(() => {});
+      }
       notifySaleCompleted(order._id).catch(() => {});
     }
 
     revalidatePath("/admin/orders");
     revalidatePath("/dashboard");
+    revalidatePath("/reseller");
+    revalidatePath("/admin/resellers");
     revalidatePath(`/checkout/${id}`);
 
     return NextResponse.json({ ok: true, order: JSON.parse(JSON.stringify(order)) });

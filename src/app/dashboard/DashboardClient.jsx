@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatPrice, timeAgo } from "@/lib/format";
 import CountUp from "@/components/CountUp";
 import { DiscordIcon } from "@/components/Navbar";
+import ResellerBadge from "@/components/ResellerBadge";
 import WhatsAppSupport from "@/components/WhatsAppSupport";
 import Logo from "@/components/Logo";
 
@@ -252,6 +253,7 @@ export default function DashboardClient({
   const userAvatar = user.image || dbUser?.avatar;
   const userName = user.name || dbUser?.username || "Member";
   const userRole = session?.user?.isAdmin ? "Admin" : dbUser?.role === "client" ? "Client" : "User";
+  const isReseller = Boolean(dbUser?.isReseller);
   const isRealDiscord = (value) => /^\d{15,25}$/.test(String(value || "").trim());
   const linkedDiscordId =
     dbUser?.authProviders?.discord?.id ||
@@ -410,6 +412,7 @@ export default function DashboardClient({
               <span className="badge-theme px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
                 {userRole}
               </span>
+              {isReseller && <ResellerBadge />}
             </div>
 
             <div className="mt-1 flex items-center gap-2 text-xs text-neutral-400">
@@ -1378,6 +1381,7 @@ export default function DashboardClient({
                 <span className="badge-theme px-2 py-0.5 text-[10px] font-bold uppercase">
                   Role: {userRole}
                 </span>
+                {isReseller && <ResellerBadge />}
               </div>
             </div>
           </div>

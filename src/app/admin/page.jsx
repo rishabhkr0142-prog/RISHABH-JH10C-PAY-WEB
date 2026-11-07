@@ -14,6 +14,7 @@ export default async function AdminOverviewPage() {
 
   const [
     userCount,
+    resellerCount,
     clientUserCount,
     legacyClientCount,
     orderCount,
@@ -23,6 +24,7 @@ export default async function AdminOverviewPage() {
     totalPaymentsCount,
   ] = await Promise.all([
     User.countDocuments().catch(() => 0),
+    User.countDocuments({ isReseller: true }).catch(() => 0),
     User.countDocuments({ role: "client" }).catch(() => 0),
     Client.countDocuments().catch(() => 0),
     Order.countDocuments().catch(() => 0),
@@ -85,6 +87,7 @@ export default async function AdminOverviewPage() {
   const cards = [
     { label: "Total Users", value: userCount, href: "/admin/users", note: "Discord members in DB" },
     { label: "Total Clients", value: totalClients, href: "/admin/clients", note: "Verified buyers" },
+    { label: "Total Resellers", value: resellerCount, href: "/admin/resellers", note: "Lifetime members" },
     { label: "Total Orders", value: orderCount, href: "/admin/orders", note: "All-time store orders" },
     { label: "Total Revenue", value: formatPrice(revenue), isPrice: true, href: "/admin/orders", note: "Completed + Paid" },
   ];
@@ -114,8 +117,8 @@ export default async function AdminOverviewPage() {
         </div>
       )}
 
-      {/* 4 Metric Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* 5 Metric Cards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map((c) => (
           <Link
             key={c.label}

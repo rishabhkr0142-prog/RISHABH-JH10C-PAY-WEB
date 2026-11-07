@@ -6,7 +6,7 @@ import { findUserForSession } from "@/lib/account";
 import { toPlainText } from "@/lib/serialize";
 import { isOrderOwner, redactOrderLicense } from "@/lib/order-access";
 import { releaseProductStockReservation } from "@/lib/product-stock";
-import { generateBrandedQrCode } from "@/lib/qr";
+import { generateQrCode } from "@/lib/qr";
 import CheckoutClient from "./CheckoutClient";
 
 export const dynamic = "force-dynamic";
@@ -106,10 +106,10 @@ export default async function OrderCheckoutPage({ params }) {
     },
   };
 
-  // Generate high-resolution branded QR code image on the server
+  // Generate high-resolution clean QR code image on the server (no center logo overlay)
   let qrCodeDataUrl = "";
   if (order.status === "pending") {
-    qrCodeDataUrl = await generateBrandedQrCode(upiLinks.generic, { size: 600 });
+    qrCodeDataUrl = await generateQrCode(upiLinks.generic, { size: 600 });
   }
 
   const serializedOrder = redactOrderLicense(

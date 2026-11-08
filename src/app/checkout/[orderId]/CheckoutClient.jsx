@@ -89,6 +89,7 @@ export default function CheckoutClient({
   const [utrInput, setUtrInput] = useState(initialOrder?.utr || "");
   const [submittingUtr, setSubmittingUtr] = useState(false);
   const [toast, setToast] = useState(null);
+  const [website, setWebsite] = useState("");
 
   // Copy feedback states
   const [copiedUpi, setCopiedUpi] = useState(false);
@@ -354,7 +355,7 @@ export default function CheckoutClient({
       const res = await fetch(`/api/orders/${order._id}/verify-utr`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ utr: clean }),
+        body: JSON.stringify({ utr: clean, website }),
       });
 
       const data = await res.json();
@@ -1016,6 +1017,19 @@ export default function CheckoutClient({
                   UPI app se payment karne ke baad receipt mein 12-digit <strong>UTR</strong> ya{" "}
                   <strong>UPI Reference No</strong> yahan enter karein.
                 </p>
+
+                <div className="hidden" aria-hidden="true">
+                  <label htmlFor="checkout-website">Website</label>
+                  <input
+                    id="checkout-website"
+                    name="website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={(event) => setWebsite(event.target.value)}
+                  />
+                </div>
 
                 {/* Collapsible "UTR Kahan Milega" Guide */}
                 <div className="mt-2.5">

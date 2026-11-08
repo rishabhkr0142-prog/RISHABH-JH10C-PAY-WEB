@@ -7,23 +7,31 @@ import Reveal from "@/components/Reveal";
 const FAQS = [
   {
     q: "How fast is delivery after placing an order?",
-    a: "Orders are processed through automated fulfillment. Most digital licenses and credentials are confirmed within 2 to 10 minutes. Real-time updates appear immediately on your personal Dashboard.",
+    a: "After UPI payment is verified, automated delivery usually completes within 2 to 10 minutes. Live status is on your dashboard; some orders may need manual review.",
   },
   {
-    q: "Why do I need to sign in with Discord?",
-    a: "Discord OAuth ensures verified identities, eliminates fake bot accounts, and ties your orders directly to your Discord account for one-click access and support role synchronization.",
+    q: "Why do I need to sign in?",
+    a: "Discord or Google sign-in verifies your identity, links orders to your account, and helps prevent fake or duplicate accounts. Linking Discord also enables DM delivery and support roles.",
   },
   {
     q: "What payment methods are supported?",
-    a: "We are currently accepting pending orders through our automated pipeline. Manual and automated gateway completions are facilitated through our official Discord server.",
+    a: "Website checkout currently accepts UPI only. Pay the exact amount to the store UPI ID shown at checkout, then submit the 12-digit UTR. We never ask for your UPI PIN, bank password, or card details.",
   },
   {
-    q: "What is the 10-minute order cooldown?",
-    a: "To prevent spam and protect our automated delivery queues, standard accounts have a 10-minute cooldown period between placing consecutive orders. Admins and verified priority clients are exempt.",
+    q: "How does UTR verification work?",
+    a: "After paying, submit the 12-digit UTR from your receipt. We match it to an incoming payment for the same amount and order window. If it is not found yet, wait 30 to 60 seconds and retry.",
+  },
+  {
+    q: "How does the order cooldown work?",
+    a: "Non-admin accounts normally wait 10 minutes between orders. Admins are exempt; the current cooldown may be adjusted in store settings.",
+  },
+  {
+    q: "Can I become a reseller?",
+    a: "Yes. The reseller program is a one-time ₹149 lifetime membership. It gives 50% off License App products only, including future License App products. Coupons do not stack, and there are no wholesale or volume tiers.",
   },
   {
     q: "What happens if a product has an issue?",
-    a: "Every transaction comes with a complete replacement guarantee. If anything does not perform as described, open a ticket via Discord or click Contact Support on your Dashboard order receipt.",
+    a: "If a key or delivery is defective or not as described, contact support with your order reference. We will investigate and provide a replacement, or a refund where a replacement cannot be provided, under the Refund Policy.",
   },
 ];
 

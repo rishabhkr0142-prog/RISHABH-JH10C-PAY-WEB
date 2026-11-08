@@ -1,6 +1,11 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
 
+export const metadata = {
+  title: "Sign-In Error",
+  robots: { index: false, follow: false },
+};
+
 const ERROR_DETAILS = {
   Configuration: {
     title: "Configuration Error",

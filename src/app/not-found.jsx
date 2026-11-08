@@ -1,6 +1,11 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
 
+export const metadata = {
+  title: "Page Not Found",
+  robots: { index: false, follow: false },
+};
+
 export default function NotFound() {
   return (
     <section className="relative flex min-h-[75vh] items-center justify-center px-4">

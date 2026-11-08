@@ -46,7 +46,7 @@ export default function CommunitySection({ communityData }) {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={u.avatar}
-                      alt={u.username}
+                      alt={`${u.username || "Community member"} Discord avatar`}
                       className="h-full w-full object-cover"
                       referrerPolicy="no-referrer"
                     />

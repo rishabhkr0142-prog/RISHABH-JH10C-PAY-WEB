@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Dashboard",
   description: "Manage your purchases, order history, and account profile.",
+  robots: { index: false, follow: false },
 };
 
 const PAGE_SIZE = 50;

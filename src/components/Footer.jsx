@@ -3,6 +3,8 @@ import { DiscordIcon } from "@/components/Navbar";
 import { getAllSettings } from "@/lib/settings";
 import Logo from "@/components/Logo";
 
+const linkClass = "text-neutral-400 transition hover:text-white";
+
 export default async function Footer() {
   const year = new Date().getFullYear();
   let settings = {};
@@ -18,7 +20,7 @@ export default async function Footer() {
 
   return (
     <footer className="border-t border-theme-border bg-theme-surface px-4 py-14 sm:px-8 transition-colors duration-200">
-      <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-[2fr_1fr_1fr]">
+      <div className="mx-auto grid gap-10 md:grid-cols-2 lg:grid-cols-[1.7fr_1fr_1fr_1fr]">
         {/* Brand */}
         <div>
           <Logo variant="combo" size={32} subtext="PAY WEB" href="/" />
@@ -38,33 +40,72 @@ export default async function Footer() {
         {/* Explore */}
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
-            Navigation
+            Explore
           </h3>
           <ul className="mt-3.5 space-y-2 text-xs">
             <li>
-              <Link href="/" className="text-neutral-400 transition hover:text-white">
+              <Link href="/" className={linkClass}>
                 Home
               </Link>
             </li>
             <li>
-              <Link href="/products" className="text-neutral-400 transition hover:text-white">
-                Products Catalog
+              <Link href="/products" className={linkClass}>
+                Browse all products
               </Link>
             </li>
             <li>
-              <Link href="/dashboard" className="text-neutral-400 transition hover:text-white">
-                Client Dashboard
+              <Link href="/offers" className={linkClass}>
+                View current offers
               </Link>
             </li>
             <li>
-              <Link href="/support" className="text-neutral-400 transition hover:text-white">
-                Support & Help
+              <Link href="/reseller" className={linkClass}>
+                Reseller program (50% off)
+              </Link>
+            </li>
+            <li>
+              <Link href="/dashboard" className={linkClass}>
+                Client dashboard
               </Link>
             </li>
           </ul>
         </div>
 
-        {/* Support & Community */}
+        {/* Help & Legal */}
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
+            Help &amp; Legal
+          </h3>
+          <ul className="mt-3.5 space-y-2 text-xs">
+            <li>
+              <Link href="/support" className={linkClass}>
+                Support &amp; help center
+              </Link>
+            </li>
+            <li>
+              <Link href="/support#faq" className={linkClass}>
+                Frequently asked questions
+              </Link>
+            </li>
+            <li>
+              <Link href="/privacy" className={linkClass}>
+                Privacy Policy
+              </Link>
+            </li>
+            <li>
+              <Link href="/terms" className={linkClass}>
+                Terms &amp; Conditions
+              </Link>
+            </li>
+            <li>
+              <Link href="/refund" className={linkClass}>
+                Refund Policy
+              </Link>
+            </li>
+          </ul>
+        </div>
+
+        {/* Direct Contact */}
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
             Direct Contact
@@ -90,8 +131,8 @@ export default async function Footer() {
               </a>
             </li>
             <li>
-              <Link href="/support" className="text-neutral-400 transition hover:text-white">
-                Frequently Asked Questions
+              <Link href="/support" className={linkClass}>
+                Order &amp; payment help
               </Link>
             </li>
           </ul>

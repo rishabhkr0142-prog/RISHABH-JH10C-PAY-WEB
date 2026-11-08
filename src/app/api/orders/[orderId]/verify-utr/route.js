@@ -50,6 +50,11 @@ export async function POST(request, { params }) {
     return NextResponse.json({ error: "Invalid order ID" }, { status: 400 });
   }
 
+  const body = await request.json().catch(() => ({}));
+  if (typeof body?.website === "string" && body.website.trim()) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
   try {
     await connectDB();
     const userDoc = await findUserForSession(session);
@@ -104,9 +109,15 @@ export async function POST(request, { params }) {
       );
     }
 
-    // 3. Parse and Validate 12-Digit UTR
-    const body = await request.json().catch(() => ({}));
-    const rawUtr = String(body.utr || "").trim();
+    // 3. Validate the submitted 12-digit UTR
+    const rawUtr = String(body?.utr || "").trim();
+    if (rawUtr.length > 32) {
+      return NextResponse.json(
+        { error: "UTR must be exactly 12 numeric digits." },
+        { status: 400 }
+      );
+    }
+
     const cleanUtr = rawUtr.replace(/[\s-]/g, "");
 
     if (!/^\d{12}$/.test(cleanUtr)) {

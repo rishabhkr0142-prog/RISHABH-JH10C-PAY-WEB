@@ -13,9 +13,17 @@ import FeaturesGrid from "@/components/FeaturesGrid";
 import HowItWorks from "@/components/HowItWorks";
 import FaqAccordion from "@/components/FaqAccordion";
 import FinalCta from "@/components/FinalCta";
+import { buildPageMetadata } from "@/lib/site";
 
 // Cache the public landing page for 60s; writes call revalidatePath("/").
 export const revalidate = 60;
+
+export const metadata = buildPageMetadata({
+  title: "Digital Products Store | RISHABH JH10C PAY WEB",
+  description:
+    "Buy premium digital products with automated delivery after UPI payment. Track orders in your dashboard and get help from Discord support.",
+  path: "/",
+});
 
 export default async function HomePage() {
   let stats = { users: 0, orders: 0, clients: 0 };

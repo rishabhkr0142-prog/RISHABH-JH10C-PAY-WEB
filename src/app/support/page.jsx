@@ -11,23 +11,27 @@ const DISCORD_URL =
 const FAQS = [
   {
     q: "How fast is delivery after I place an order?",
-    a: "Orders are fulfilled automatically through our Discord bot queue within 2 to 10 minutes. If manual review is required, you will receive a notification in Discord.",
+    a: "After UPI payment is verified, automated delivery usually completes within 2 to 10 minutes. Live status is on your dashboard; some orders may need manual review.",
   },
   {
     q: "Which payment methods are accepted?",
-    a: "We accept digital gateway payments and manual methods (UPI, PayPal, Crypto, Cards) coordinated securely via our Discord support desk.",
+    a: "Website checkout currently accepts UPI only. Pay the exact amount to the store UPI ID, then submit the 12-digit UTR. We never ask for your UPI PIN, bank password, or card details.",
+  },
+  {
+    q: "How does UTR verification work?",
+    a: "After paying, submit the 12-digit UTR from your receipt. We match it to an incoming payment for the same amount and order window. If it is not found yet, wait 30 to 60 seconds and retry.",
   },
   {
     q: "What if my product or key is defective?",
-    a: "Every transaction comes with a full replacement warranty. Reach out to our 24/7 Discord support team with your Order ID for an immediate replacement or refund.",
+    a: "If a key or delivery is defective or not as described, contact support with your order reference. We will investigate and provide a replacement, or a refund where a replacement cannot be provided, under the Refund Policy.",
   },
   {
-    q: "Can I place bulk orders or become a reseller?",
-    a: "Yes. Reseller tiers and volume discounts are available. Open a partner ticket in our Discord server to receive wholesale pricing.",
+    q: "Can I become a reseller?",
+    a: "Yes. The reseller program is a one-time ₹149 lifetime membership. It gives 50% off License App products only, including future License App products. Coupons do not stack, and there are no wholesale or volume tiers.",
   },
   {
-    q: "How does the 10-minute order cooldown work?",
-    a: "To prevent spam and queue flooding, standard accounts can submit one order every 10 minutes. Verified clients and admins are exempt.",
+    q: "How does the order cooldown work?",
+    a: "Non-admin accounts normally wait 10 minutes between orders. Admins are exempt; the current cooldown may be adjusted in store settings.",
   },
 ];
 
@@ -117,7 +121,7 @@ export default function SupportPage() {
       </div>
 
       {/* ── FAQ Section ── */}
-      <div className="glass mt-16 p-8">
+      <div id="faq" className="glass mt-16 scroll-mt-24 p-8">
         <h2 className="text-lg font-bold text-white">Frequently Asked Questions</h2>
         <div className="mt-6 space-y-6 divide-y divide-white/5">
           {FAQS.map((faq, i) => (

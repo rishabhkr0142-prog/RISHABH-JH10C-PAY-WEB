@@ -4,16 +4,17 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { FloatingThemeSwitcher } from "@/components/ThemeSwitcher";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  DEFAULT_OG_IMAGE_ALT,
+  SITE_NAME,
+  SITE_URL,
+} from "@/lib/site";
 import "./globals.css";
 
-const SITE_NAME = "RISHABH JH10C PAY WEB";
-const SITE_URL =
-  process.env.SITE_URL ||
-  process.env.APP_URL ||
-  process.env.NEXTAUTH_URL ||
-  "https://rishabh-jh10c-pay-web.antideploy.app";
-const DESCRIPTION =
-  "RISHABH JH10C PAY WEB — High-performance multi-theme digital store. Instant automated delivery, Discord verification, and 24/7 dedicated support.";
+const DESCRIPTION = DEFAULT_DESCRIPTION;
 
 export const viewport = {
   themeColor: "#000000",
@@ -25,18 +26,11 @@ export const viewport = {
 export const metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — Digital Store`,
+    default: `${SITE_NAME} — Digital Products Store`,
     template: `%s | ${SITE_NAME}`,
   },
   description: DESCRIPTION,
-  keywords: [
-    "digital store",
-    "instant delivery",
-    "RISHABH JH10C",
-    "verified products",
-    "discord store",
-    "upi pay web",
-  ],
+  applicationName: SITE_NAME,
   authors: [{ name: "RISHABH JH10C" }],
   icons: {
     icon: [
@@ -53,25 +47,26 @@ export const metadata = {
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: `${SITE_NAME} — Digital Store`,
+    title: `${SITE_NAME} — Digital Products Store`,
     description: DESCRIPTION,
+    url: SITE_URL,
     siteName: SITE_NAME,
     type: "website",
     locale: "en_US",
     images: [
       {
-        url: "/og-image.png",
+        url: DEFAULT_OG_IMAGE,
         width: 1200,
         height: 630,
-        alt: "RISHABH JH10C PAY WEB",
+        alt: DEFAULT_OG_IMAGE_ALT,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} — Digital Store`,
+    title: `${SITE_NAME} — Digital Products Store`,
     description: DESCRIPTION,
-    images: ["/og-image.png"],
+    images: [{ url: DEFAULT_OG_IMAGE, alt: DEFAULT_OG_IMAGE_ALT }],
   },
   robots: { index: true, follow: true },
 };
@@ -118,6 +113,7 @@ export default function RootLayout({ children }) {
             <FloatingThemeSwitcher />
           </ThemeProvider>
         </AuthProvider>
+        <GoogleAnalytics />
       </body>
     </html>
   );

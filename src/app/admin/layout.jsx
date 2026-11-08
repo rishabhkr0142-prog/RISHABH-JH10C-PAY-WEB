@@ -5,7 +5,10 @@ import AdminTabs from "./AdminTabs";
 import Logo from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Admin Panel" };
+export const metadata = {
+  title: "Admin Panel",
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({ children }) {
   const session = await getSession();
@@ -42,7 +45,7 @@ export default async function AdminLayout({ children }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={session.user.image}
-              alt=""
+              alt={`${session.user?.name || "Admin"} profile picture`}
               className="h-7 w-7 rounded-full border border-theme-border object-cover"
             />
           ) : null}

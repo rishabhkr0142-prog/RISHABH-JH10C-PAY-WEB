@@ -72,7 +72,7 @@ export default async function AdminUsersPage({ searchParams }) {
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={user.avatar}
-                              alt=""
+                              alt={`${user.username || "User"} profile picture`}
                               className="h-full w-full object-cover"
                             />
                           ) : (

@@ -16,7 +16,7 @@ function Avatar({ user }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
-          alt=""
+          alt={`${name} profile picture`}
           className="h-full w-full object-cover"
           referrerPolicy="no-referrer"
         />

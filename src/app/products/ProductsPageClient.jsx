@@ -202,7 +202,7 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                   >
                     {/* Image Area */}
                     <Link
-                      href={`/products/${product._id || product.slug}`}
+                      href={`/products/${product.slug || product._id}`}
                       className="relative block aspect-[4/3] w-full overflow-hidden border-b border-theme-border bg-black"
                     >
                       <ProductImage
@@ -251,7 +251,7 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                     {/* Content */}
                     <div className="flex flex-1 flex-col p-5">
                       <Link
-                        href={`/products/${product._id || product.slug}`}
+                        href={`/products/${product.slug || product._id}`}
                         className="group-hover:underline"
                       >
                         <h2 className="text-base font-bold text-white">
@@ -314,7 +314,7 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                         </div>
 
                         <Link
-                          href={`/products/${product._id || product.slug}`}
+                          href={`/products/${product.slug || product._id}`}
                           className="btn-primary !px-3.5 !py-1.5 !text-xs font-medium"
                         >
                           View Details

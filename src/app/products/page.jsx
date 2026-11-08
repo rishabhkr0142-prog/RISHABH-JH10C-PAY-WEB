@@ -7,15 +7,17 @@ import {
   maybeReleaseExpiredStockReservations,
 } from "@/lib/product-stock";
 import ProductsPageClient from "./ProductsPageClient";
+import { buildPageMetadata } from "@/lib/site";
 
 // Catalog is public — cache for 30s and revalidate on product changes.
 export const revalidate = 30;
 
-export const metadata = {
-  title: "Products & Services",
+export const metadata = buildPageMetadata({
+  title: "All Digital Products",
   description:
-    "Explore premium digital products, gaming accounts, subscriptions, and tools with instant delivery.",
-};
+    "Browse every digital product and license plan available in the store. See live prices, stock status, and delivery details before ordering.",
+  path: "/products",
+});
 
 export default async function ProductsPage() {
   let products = [];

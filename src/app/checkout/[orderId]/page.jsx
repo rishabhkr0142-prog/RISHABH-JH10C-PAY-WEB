@@ -15,6 +15,8 @@ export const revalidate = 0;
 export async function generateMetadata({ params }) {
   return {
     title: `Checkout #${String(params?.orderId || "").slice(-6)}`,
+    description: "Complete your UPI payment and submit the transaction reference.",
+    robots: { index: false, follow: false },
   };
 }
 

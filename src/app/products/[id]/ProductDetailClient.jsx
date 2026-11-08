@@ -371,7 +371,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                 >
                   <ProductImage
                     src={img}
-                    alt=""
+                    alt={`${product.name} image ${i + 1}`}
                     width={200}
                     sizes="96px"
                     className="object-cover"
@@ -685,8 +685,12 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
               className="text-[11px] leading-relaxed text-neutral-300"
             >
               I have read the product details and agree to the{" "}
-              <Link href="/support" className="font-medium text-white underline">
-                terms &amp; refund policy
+              <Link href="/terms" className="font-medium text-white underline">
+                Terms &amp; Conditions
+              </Link>{" "}
+              and{" "}
+              <Link href="/refund" className="font-medium text-white underline">
+                Refund Policy
               </Link>
               . I understand digital products cannot be refunded once delivered.
             </label>

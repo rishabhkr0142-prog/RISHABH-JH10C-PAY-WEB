@@ -34,6 +34,17 @@ export async function POST(request) {
 
   const body = await request.json().catch(() => ({}));
 
+  if (typeof body?.website === "string" && body.website.trim()) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (idempotencyKey.length > 200) {
+    return NextResponse.json(
+      { error: "Invalid Idempotency-Key." },
+      { status: 400 }
+    );
+  }
+
   const result = await createResellerOrder({
     session,
     idempotencyKey,

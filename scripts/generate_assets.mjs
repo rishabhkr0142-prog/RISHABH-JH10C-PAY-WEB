@@ -151,34 +151,7 @@ async function run() {
   fs.writeFileSync(path.join(appDir, 'apple-icon.png'), apple180);
   console.log('Saved src/app/favicon.ico, icon.png, apple-icon.png');
 
-  // 6. Generate Open Graph / Twitter Image: 1200x630
-  // Center logo.png (scaled to fit nicely in 560x560 inside 1200x630)
-  const ogLogo = await sharp(fullLogoBuffer)
-    .resize(560, 560, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
-    .toBuffer();
-
-  const ogImageBuf = await sharp({
-    create: {
-      width: 1200,
-      height: 630,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 1 },
-    },
-  })
-    .composite([
-      {
-        input: ogLogo,
-        top: Math.round((630 - 560) / 2),
-        left: Math.round((1200 - 560) / 2),
-      },
-    ])
-    .png({ quality: 90 })
-    .toBuffer();
-
-  fs.writeFileSync(path.join(publicDir, 'og-image.png'), ogImageBuf);
-  console.log('Saved public/og-image.png (1200x630)');
-
-  // 7. Web manifest
+  // 6. Web manifest
   const manifest = {
     name: "RISHABH JH10C PAY WEB",
     short_name: "RJ PAY",

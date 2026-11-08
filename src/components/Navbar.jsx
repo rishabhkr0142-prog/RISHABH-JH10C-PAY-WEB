@@ -71,7 +71,7 @@ function UserMenu({ session, isReseller = false }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={avatar}
-              alt={name}
+              alt={`${name} profile picture`}
               className="h-full w-full object-cover"
               referrerPolicy="no-referrer"
             />
@@ -349,7 +349,7 @@ export default function Navbar() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={session.user.image}
-                            alt=""
+                            alt={`${session?.user?.name || "Member"} profile picture`}
                             className="h-full w-full object-cover"
                           />
                         ) : (

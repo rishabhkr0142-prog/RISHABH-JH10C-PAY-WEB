@@ -396,7 +396,7 @@ export default function DashboardClient({
           <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-theme-border bg-theme-surface">
             {userAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={userAvatar} alt="" className="h-full w-full object-cover" />
+              <img src={userAvatar} alt={`${userName} profile picture`} className="h-full w-full object-cover" />
             ) : (
               <span className="flex h-full w-full items-center justify-center font-mono text-xl font-bold text-white">
                 {userName.charAt(0).toUpperCase()}
@@ -1367,7 +1367,7 @@ export default function DashboardClient({
             <div className="relative h-16 w-16 overflow-hidden rounded-xl border border-theme-border bg-theme-surface">
               {userAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={userAvatar} alt="" className="h-full w-full object-cover" />
+                <img src={userAvatar} alt={`${userName} profile picture`} className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center font-mono text-2xl font-bold text-white">
                   {userName.charAt(0).toUpperCase()}

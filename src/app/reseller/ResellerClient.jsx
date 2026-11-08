@@ -97,6 +97,7 @@ export default function ResellerClient({
   const [showTerms, setShowTerms] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [refundAckAccepted, setRefundAckAccepted] = useState(false);
+  const [website, setWebsite] = useState("");
   const sessionSyncedRef = useRef(false);
   const canJoin = termsAccepted && refundAckAccepted;
 
@@ -152,7 +153,7 @@ export default function ResellerClient({
           "Content-Type": "application/json",
           "Idempotency-Key": getKey(),
         },
-        body: JSON.stringify({ termsAccepted, refundAckAccepted }),
+        body: JSON.stringify({ termsAccepted, refundAckAccepted, website }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -332,6 +333,19 @@ export default function ResellerClient({
                   </li>
                 ))}
               </ul>
+
+              <div className="hidden" aria-hidden="true">
+                <label htmlFor="reseller-website">Website</label>
+                <input
+                  id="reseller-website"
+                  name="website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={website}
+                  onChange={(event) => setWebsite(event.target.value)}
+                />
+              </div>
 
               <div className="mt-5 space-y-3 border-t border-white/10 pt-5">
                 <label className="flex cursor-pointer items-start gap-2.5 text-[11px] leading-relaxed text-neutral-300">

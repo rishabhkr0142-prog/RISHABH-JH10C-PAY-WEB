@@ -85,6 +85,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
     product.active !== false &&
     product.available !== false &&
     selectedStockInfo.inStock;
+  const isInMaintenance = Boolean(product?.inMaintenance);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -195,6 +196,16 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
     if (status !== "authenticated" || !session?.user) {
       const currentUrl = `/products/${product._id || product.slug}`;
       router.push(`/login?callbackUrl=${encodeURIComponent(currentUrl)}`);
+      return;
+    }
+
+    if (isInMaintenance) {
+      setToast({
+        type: "error",
+        text:
+          product.maintenanceReason ||
+          "This product is currently under maintenance. Orders are temporarily paused.",
+      });
       return;
     }
 
@@ -334,26 +345,33 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
             />
 
             <div className="absolute left-3 top-3">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium backdrop-blur-md border ${
-                  !isAvailable
-                    ? "border-neutral-700 bg-black/80 text-neutral-400"
-                    : stockBadge.tone === "low"
-                    ? "border-amber-500/40 bg-black/80 text-amber-300"
-                    : "border-emerald-500/30 bg-black/80 text-emerald-300"
-                }`}
-              >
+              {isInMaintenance ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-black/85 px-2.5 py-0.5 text-xs font-bold text-amber-300 backdrop-blur-md">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Under Maintenance
+                </span>
+              ) : (
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium backdrop-blur-md border ${
                     !isAvailable
-                      ? "bg-neutral-500"
+                      ? "border-neutral-700 bg-black/80 text-neutral-400"
                       : stockBadge.tone === "low"
-                      ? "bg-amber-400"
-                      : "bg-emerald-400"
+                      ? "border-amber-500/40 bg-black/80 text-amber-300"
+                      : "border-emerald-500/30 bg-black/80 text-emerald-300"
                   }`}
-                />
-                {isAvailable ? stockBadge.label : "Out of Stock"}
-              </span>
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      !isAvailable
+                        ? "bg-neutral-500"
+                        : stockBadge.tone === "low"
+                        ? "bg-amber-400"
+                        : "bg-emerald-400"
+                    }`}
+                  />
+                  {isAvailable ? stockBadge.label : "Out of Stock"}
+                </span>
+              )}
             </div>
           </div>
 
@@ -399,6 +417,53 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
           <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
             {product.name}
           </h1>
+
+          {/* Maintenance Alert Card */}
+          {isInMaintenance && (
+            <div className="mt-4 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-neutral-900/80 to-amber-950/30 p-4 shadow-lg backdrop-blur-md">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400">
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                      Under Maintenance
+                    </span>
+                    {product.maintenanceSource === "category" && (
+                      <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-mono text-neutral-300">
+                        Category: {product.category}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-xs text-neutral-200">
+                    {product.maintenanceReason ||
+                      "This product is temporarily undergoing maintenance."}
+                  </p>
+                  {product.maintenanceUntil && (
+                    <p className="mt-1 font-mono text-[11px] text-amber-300">
+                      Estimated completion: {product.maintenanceUntil}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-[10px] text-neutral-400">
+                    Purchases are temporarily paused. If you already purchased, all existing orders and payment verifications remain fully active.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Huge Price */}
           <div className="mt-5 flex flex-wrap items-baseline gap-3">
@@ -477,7 +542,7 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                     String(plan.label).toLowerCase().includes("lifetime");
                   const planStock = getPlanStockInfo(product, plan);
                   const planBadge = getStockBadge(planStock);
-                  const planDisabled = !planStock.inStock;
+                  const planDisabled = !planStock.inStock || isInMaintenance;
                   const planResellerDiscount =
                     isReseller && isLicenseProduct(product)
                       ? resellerDiscountAmount(plan.price)
@@ -700,9 +765,9 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
           <div className="mt-4 flex flex-col gap-3">
             <button
               onClick={handleBuyNow}
-              disabled={loading || !isAvailable || cooldownRemaining > 0 || !agreedToTerms}
+              disabled={loading || isInMaintenance || !isAvailable || cooldownRemaining > 0 || !agreedToTerms}
               className={`btn-primary w-full py-3.5 text-sm font-bold shadow-lg ${
-                cooldownRemaining > 0 || !agreedToTerms ? "opacity-60 cursor-not-allowed" : ""
+                isInMaintenance || cooldownRemaining > 0 || !agreedToTerms ? "opacity-60 cursor-not-allowed" : ""
               }`}
             >
               {loading ? (
@@ -710,6 +775,8 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   Processing Order...
                 </span>
+              ) : isInMaintenance ? (
+                "Under Maintenance"
               ) : cooldownRemaining > 0 ? (
                 `Cooldown (${formatCountdown(cooldownRemaining)})`
               ) : !isAvailable ? (
@@ -721,13 +788,17 @@ export default function ProductDetailClient({ product, initialCouponCode = "" })
               )}
             </button>
 
-            {!agreedToTerms && isAvailable && cooldownRemaining <= 0 && (
+            {isInMaintenance ? (
+              <p className="text-center text-[11px] text-amber-400/90">
+                Purchases are paused while maintenance is underway.
+              </p>
+            ) : !agreedToTerms && isAvailable && cooldownRemaining <= 0 ? (
               <p className="text-center text-[11px] text-amber-400/90">
                 Tick the checkbox above to enable Buy Now.
               </p>
-            )}
+            ) : null}
 
-            {status !== "authenticated" && (
+            {status !== "authenticated" && !isInMaintenance && (
               <p className="text-center text-[11px] text-neutral-500">
                 You will be redirected to Discord OAuth to securely confirm your identity.
               </p>

@@ -98,6 +98,9 @@ const ProductSchema = new mongoose.Schema(
     reserved: { type: Number, default: 0, min: 0 },
     // Manual kill-switch that works even for unlimited products.
     outOfStock: { type: Boolean, default: false, index: true },
+    // Maintenance mode flag and custom message
+    maintenance: { type: Boolean, default: false, index: true },
+    maintenanceReason: { type: String, default: "", trim: true, maxlength: 200 },
     active: { type: Boolean, default: true, index: true },
     // Backward-compatible available flag (synced with active)
     available: { type: Boolean, default: true },

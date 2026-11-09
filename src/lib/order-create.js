@@ -30,6 +30,7 @@ import {
   failIdempotency,
   hashRequestBody,
 } from "@/lib/idempotency";
+import { resolveProductMaintenance } from "@/lib/maintenance";
 
 /**
  * Create a pending order for an authenticated session.
@@ -115,6 +116,16 @@ export async function createOrder({
     if (!product || product.active === false || product.available === false) {
       return fail(404, {
         error: "Product is not available for purchase.",
+      });
+    }
+
+    // Maintenance Mode Check (Product or its Category)
+    const maintenanceStatus = await resolveProductMaintenance(product);
+    if (maintenanceStatus.inMaintenance) {
+      return fail(400, {
+        error:
+          maintenanceStatus.reason ||
+          "This product is temporarily under maintenance and cannot be purchased right now.",
       });
     }
 

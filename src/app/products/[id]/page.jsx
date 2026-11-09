@@ -7,6 +7,7 @@ import {
   attachStockAvailability,
   maybeReleaseExpiredStockReservations,
 } from "@/lib/product-stock";
+import { resolveProductMaintenance } from "@/lib/maintenance";
 import ProductDetailClient from "./ProductDetailClient";
 import {
   buildPageMetadata,
@@ -83,7 +84,16 @@ export default async function ProductDetailPage({ params, searchParams }) {
 
     if (doc) {
       const withStock = await attachStockAvailability(toPlainText(doc));
-      product = stripProductDeliveryFields(withStock);
+      const stripped = stripProductDeliveryFields(withStock);
+      const maintenance = await resolveProductMaintenance(stripped);
+      product = {
+        ...stripped,
+        inMaintenance: maintenance.inMaintenance,
+        maintenanceReason: maintenance.reason,
+        maintenanceSource: maintenance.source,
+        maintenanceUntil: maintenance.maintenanceUntil,
+        maintenanceSince: maintenance.maintenanceSince,
+      };
     }
   } catch (err) {
     console.error("Product detail error:", err?.message || err);

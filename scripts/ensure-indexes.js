@@ -205,6 +205,40 @@ async function run() {
     )
   );
 
+  // Maintenance mode indexes
+  results.push(
+    await createIndex(
+      db,
+      "categories",
+      { name: 1 },
+      { unique: true, name: "uniq_categories_name" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "categories",
+      { maintenance: 1 },
+      { name: "idx_categories_maintenance" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "products",
+      { maintenance: 1 },
+      { name: "idx_products_maintenance" }
+    )
+  );
+  results.push(
+    await createIndex(
+      db,
+      "maintenancelogs",
+      { createdAt: -1 },
+      { name: "idx_maintenancelogs_created" }
+    )
+  );
+
   await disconnect();
 
   if (results.some((ok) => !ok)) {

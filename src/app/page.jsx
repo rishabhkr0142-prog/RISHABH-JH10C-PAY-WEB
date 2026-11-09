@@ -13,6 +13,8 @@ import FeaturesGrid from "@/components/FeaturesGrid";
 import HowItWorks from "@/components/HowItWorks";
 import FaqAccordion from "@/components/FaqAccordion";
 import FinalCta from "@/components/FinalCta";
+import CategoryMaintenanceBanner from "@/components/CategoryMaintenanceBanner";
+import { getActiveMaintenanceCategories } from "@/lib/maintenance";
 import { buildPageMetadata } from "@/lib/site";
 
 // Cache the public landing page for 60s; writes call revalidatePath("/").
@@ -31,6 +33,7 @@ export default async function HomePage() {
   let googleUsers = { total: 0, avatars: [] };
   let settings = {};
   let offers = [];
+  let maintenanceCategories = [];
 
   try {
     await connectDB();
@@ -41,6 +44,7 @@ export default async function HomePage() {
       fetchedSettings,
       fetchedOffers,
       fetchedGoogleUsers,
+      fetchedMaintenanceCategories,
     ] = await Promise.all([
       getPublicStats().catch(() => ({ users: 0, orders: 0, clients: 0 })),
       User.countDocuments().catch(() => 0),
@@ -53,12 +57,14 @@ export default async function HomePage() {
       getAllSettings().catch(() => ({})),
       getLiveOffers().catch(() => []),
       getGoogleUsersStats().catch(() => ({ total: 0, avatars: [] })),
+      getActiveMaintenanceCategories().catch(() => []),
     ]);
 
     stats = fetchedStats;
     settings = fetchedSettings || {};
     offers = fetchedOffers || [];
     googleUsers = fetchedGoogleUsers || { total: 0, avatars: [] };
+    maintenanceCategories = fetchedMaintenanceCategories || [];
 
     let userList = avatarUsers;
     if (userList.length < 6) {
@@ -91,6 +97,9 @@ export default async function HomePage() {
     <div className="relative">
       {/* 1. Hero */}
       <Hero discordUrl={discordUrl} />
+
+      {/* Category Maintenance Notice (if any active) */}
+      <CategoryMaintenanceBanner categories={maintenanceCategories} />
 
       {/* 2. Live Stats Strip right under hero */}
       <StatsSection stats={stats} />

@@ -6,6 +6,10 @@ import {
   attachStockAvailability,
   maybeReleaseExpiredStockReservations,
 } from "@/lib/product-stock";
+import {
+  getCategoryMaintenanceMap,
+  attachMaintenanceFields,
+} from "@/lib/maintenance";
 import ProductsPageClient from "./ProductsPageClient";
 import { buildPageMetadata } from "@/lib/site";
 
@@ -30,8 +34,13 @@ export default async function ProductsPage() {
       .sort({ createdAt: -1 })
       .lean();
 
-    const withStock = await attachStockAvailability(toPlainText(docs));
-    products = withStock.map(stripProductDeliveryFields);
+    const [withStock, categoryMap] = await Promise.all([
+      attachStockAvailability(toPlainText(docs)),
+      getCategoryMaintenanceMap(),
+    ]);
+    products = withStock
+      .map(stripProductDeliveryFields)
+      .map((p) => attachMaintenanceFields(p, categoryMap));
   } catch (err) {
     console.error("Products page fetch error:", err?.message || err);
   }

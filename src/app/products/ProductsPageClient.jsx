@@ -214,28 +214,35 @@ export default function ProductsPageClient({ initialProducts = [] }) {
                         fallbackText={product.name}
                       />
 
-                      {/* Stock badge */}
+                      {/* Maintenance or Stock badge */}
                       <div className="absolute left-3 top-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide backdrop-blur-md border ${
-                            !isAvailable
-                              ? "border-neutral-700 bg-black/80 text-neutral-400"
-                              : stockBadge.tone === "low"
-                              ? "border-amber-500/40 bg-black/80 text-amber-300"
-                              : "border-emerald-500/30 bg-black/80 text-emerald-300"
-                          }`}
-                        >
+                        {product.inMaintenance ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-black/90 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-300 backdrop-blur-md">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            Under Maintenance
+                          </span>
+                        ) : (
                           <span
-                            className={`h-1.5 w-1.5 rounded-full ${
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide backdrop-blur-md border ${
                               !isAvailable
-                                ? "bg-neutral-500"
+                                ? "border-neutral-700 bg-black/80 text-neutral-400"
                                 : stockBadge.tone === "low"
-                                ? "bg-amber-400"
-                                : "bg-emerald-400"
+                                ? "border-amber-500/40 bg-black/80 text-amber-300"
+                                : "border-emerald-500/30 bg-black/80 text-emerald-300"
                             }`}
-                          />
-                          {isAvailable ? stockBadge.label : "Out of Stock"}
-                        </span>
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                !isAvailable
+                                  ? "bg-neutral-500"
+                                  : stockBadge.tone === "low"
+                                  ? "bg-amber-400"
+                                  : "bg-emerald-400"
+                              }`}
+                            />
+                            {isAvailable ? stockBadge.label : "Out of Stock"}
+                          </span>
+                        )}
                       </div>
 
                       {/* Category tag */}
